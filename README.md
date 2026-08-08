@@ -4,7 +4,7 @@ readme = r"""# Dhruv Bhavsar — Portfolio
 
 > A modern developer portfolio showcasing my projects, technical skills, experience, and the engineering work behind each project.
 
-🌐 **Live Portfolio:** https://the-vultaro.vercel.app/
+🌐 **Live Portfolio:**(https://dhruvbhavsar1.github.io/Portfolio/)
 
 > **Note:** The live URL above is the previously shared deployment URL. Update it if your current portfolio has a different deployment URL.
 
