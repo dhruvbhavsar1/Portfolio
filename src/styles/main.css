@@ -1,0 +1,3 @@
+/* main.css - global styles kept minimal; Tailwind supplies the rest */
+html, body { height: 100%; }
+body { font-family: 'JetBrains Mono', monospace; }

@@ -1,0 +1,2 @@
+/* terminal.css - cursor and small utilities */
+.cursor { display:inline-block; width:0.6ch; height:1em; vertical-align:bottom; background:currentColor; margin-left:2px; border-radius:2px; }

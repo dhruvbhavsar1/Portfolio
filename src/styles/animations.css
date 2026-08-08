@@ -1,0 +1,3 @@
+/* animations.css */
+@keyframes terminal-blink { 0%{opacity:1}50%{opacity:0}100%{opacity:1} }
+.blink { animation: terminal-blink 700ms steps(1,start) infinite }

@@ -1,0 +1,35 @@
+import { portfolioData } from '../data/portfolio.js';
+import { elements } from '../utils/dom.js';
+export function renderContact(){
+    const whoamiOutput = elements.whoamiOutput();
+    whoamiOutput.innerHTML = '';
+    const el = document.createElement('div');
+    el.className = 'p-4 border border-outline-variant bg-surface-container-lowest/50 font-code-sm whitespace-pre-wrap';
+    const c = portfolioData.contact;
+    const name = document.createElement('div');
+    name.textContent = `CONTACT.CONFIG\n\nNAME:\n${c.name}\n\nLOCATION:\n${c.location}\n\nPHONE:`;
+    const phoneLink = document.createElement('a');
+    phoneLink.href = `tel:${c.phone}`;
+    phoneLink.className = 'text-secondary underline';
+    phoneLink.textContent = c.phone;
+    const email = document.createElement('div');
+    const emailLink = document.createElement('a');
+    emailLink.href = `mailto:${c.email}`;
+    emailLink.className = 'text-secondary underline';
+    emailLink.textContent = c.email;
+    const repo = document.createElement('div');
+    const repoLink = document.createElement('a');
+    repoLink.href = c.github;
+    repoLink.target = '_blank';
+    repoLink.rel = 'noopener noreferrer';
+    repoLink.className = 'text-secondary underline';
+    repoLink.textContent = c.github;
+    el.appendChild(document.createTextNode('CONTACT.CONFIG\n\nNAME:\n' + c.name + '\n\nLOCATION:\n' + c.location + '\n\nPHONE:\n'));
+    el.appendChild(phoneLink);
+    el.appendChild(document.createTextNode('\n\nEMAIL:\n'));
+    el.appendChild(emailLink);
+    el.appendChild(document.createTextNode('\n\nGITHUB:\n'));
+    el.appendChild(repoLink);
+    el.appendChild(document.createTextNode('\n\nLINKEDIN:\n' + c.linkedin));
+    whoamiOutput.appendChild(el);
+}
