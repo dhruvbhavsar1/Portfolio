@@ -31,7 +31,7 @@ export const portfolioData = {
         frameworks: ['Flutter','Android SDK (Kotlin)'],
         backend: ['Firebase Firestore','Hive','SQLite','MySQL','Cloudinary'],
         tools: ['Git/GitHub','VS Code','Android Studio'],
-        concepts: ['Offline-first architecture','Lazy loading','Incremental sync','REST APIs','Notification systems']
+        concepts: ['first architecture','Lazy loading','Incremental sync','REST APIs','Notification systems']
     },
     education: [
         {
