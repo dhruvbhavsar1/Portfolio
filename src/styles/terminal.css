@@ -1,2 +1,24 @@
 /* terminal.css - cursor and small utilities */
 .cursor { display:inline-block; width:0.6ch; height:1em; vertical-align:bottom; background:currentColor; margin-left:2px; border-radius:2px; }
+
+.terminal-prompt { position: relative; min-height: 1.5rem; cursor: text; }
+.terminal-prompt .cursor { margin-left: -0.5rem; }
+.terminal-input {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  color: transparent !important; caret-color: transparent !important;
+  background: transparent !important; background-color: transparent !important;
+  border: 0 !important; outline: 0; padding: 0 !important; font: inherit;
+  box-shadow: none !important; -webkit-appearance: none; appearance: none;
+}
+.terminal-input:focus { outline: none; }
+.project-selected { border-color: #4edea3 !important; background: rgba(16, 185, 129, .08); }
+
+.terminal-loading::after {
+  content: ' █';
+  display: inline-block;
+  width: 2ch;
+  animation: terminal-loading-cursor 700ms steps(1, end) infinite;
+}
+@keyframes terminal-loading-cursor {
+  50% { opacity: 0; }
+}

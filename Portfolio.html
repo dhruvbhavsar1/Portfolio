@@ -3,7 +3,7 @@
 <html class="dark" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>sys@portfolio:~/root</title>
+<title>Dhruv's@portfolio:~/root</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -152,7 +152,7 @@
 <header class="flex items-center w-full px-gutter h-10 bg-surface border-b border-outline-variant font-code-sm text-code-sm text-primary docked full-width top-0 z-10 relative">
 <div class="flex items-center gap-2">
 <span class="material-symbols-outlined text-[16px]">terminal</span>
-<span>sys@portfolio:~/root</span>
+<span>Dhruv's@portfolio:~/root</span>
 </div>
 <div class="ml-auto flex items-center gap-4">
 <span class="text-on-surface-variant text-[11px] uppercase tracking-wider">Session: Active</span>
@@ -204,14 +204,8 @@
 </nav>
 <!-- Main Terminal Canvas -->
 <main class="flex-1 flex flex-col p-6 overflow-y-auto" id="terminal-output">
-<!-- Initial Command Output -->
-<div class="flex flex-col gap-1 mb-8" id="initial-sequence">
-            <div class="flex items-center gap-2 font-code-sm text-secondary">
-                <span class="text-primary">Dhruv\portfolio&gt;</span>
-                <span class="text-on-surface" id="typing-text"></span><span id="terminal-cursor" class="cursor blink" aria-hidden="true"></span>
-            </div>
-<div class="hidden flex-col gap-4 mt-4 animate-[fadeIn_0.3s_ease-in]" id="whoami-output"></div>
-</div>
+<!-- Terminal transcript -->
+<div class="flex flex-col gap-1 mb-8" id="terminal-history" aria-live="polite"></div>
 <!-- Interactive Commands Menu -->
 <div class="hidden flex-col gap-4 mb-8 w-full max-w-4xl" id="interactive-menu">
     <div class="text-on-surface-variant font-code-sm text-[11px] uppercase tracking-widest border-b border-outline-variant pb-1 mb-2">Available Commands</div>
@@ -257,6 +251,11 @@
 </div>
 </div>
 <!-- Spacer for scrolling -->
+<form id="terminal-prompt" class="terminal-prompt flex items-center gap-2 font-code-sm text-secondary mt-6 mb-8" aria-label="Terminal command input">
+    <span class="text-primary">Dhruv\portfolio&gt;</span>
+    <span class="text-on-surface" id="terminal-input-display" aria-hidden="true"></span><span class="cursor blink" aria-hidden="true"></span>
+    <input id="terminal-input" class="terminal-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Type a portfolio command" />
+</form>
 <div class="h-20 w-full shrink-0"></div>
 </main>
 </div>

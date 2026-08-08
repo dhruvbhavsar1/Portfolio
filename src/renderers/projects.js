@@ -8,11 +8,16 @@ export function renderProjectList(){
         const item = document.createElement('div');
         item.className = 'group flex flex-col p-3 border border-transparent hover:border-outline-variant hover:bg-surface-container-low cursor-pointer transition-colors';
         item.dataset.projectId = p.id;
+        item.tabIndex = 0;
+        item.setAttribute('role', 'button');
+        item.setAttribute('aria-label', `Open ${p.name}`);
         item.innerHTML = `<div class="flex items-start gap-3"><span class="text-primary mt-0.5">${String(idx+1).padStart(2,'0')}</span><div class="flex flex-col"><span class="text-on-surface font-semibold group-hover:text-primary transition-colors">${p.name}</span><span class="text-on-surface-variant text-[11px] mt-1">${p.type || p.stack?.join(', ') || ''}</span></div></div>`;
         item.addEventListener('click', () => {
             // show details
             renderProjectDetails(p.id);
         });
+        item.addEventListener('focus', () => item.classList.add('project-selected'));
+        item.addEventListener('blur', () => item.classList.remove('project-selected'));
         projectListEl.appendChild(item);
     });
 }

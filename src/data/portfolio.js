@@ -44,7 +44,7 @@ export const portfolioData = {
             id: 'bca',
             degree: 'Bachelor of Computer Applications (BCA)',
             institution: 'CHARUSAT',
-            cgpa: '6.65'
+            cgpa: '6.68'
         }
     ],
     certifications: ['Oracle Java Foundation','Coursera Python – Write Your First Program'],

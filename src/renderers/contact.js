@@ -9,7 +9,7 @@ export function renderContact(){
     const name = document.createElement('div');
     name.textContent = `CONTACT.CONFIG\n\nNAME:\n${c.name}\n\nLOCATION:\n${c.location}\n\nPHONE:`;
     const phoneLink = document.createElement('a');
-    phoneLink.href = `tel:${c.phone}`;
+    phoneLink.href = `tel:${c.phone.replace(/\s/g, '')}`;
     phoneLink.className = 'text-secondary underline';
     phoneLink.textContent = c.phone;
     const email = document.createElement('div');
@@ -30,6 +30,13 @@ export function renderContact(){
     el.appendChild(emailLink);
     el.appendChild(document.createTextNode('\n\nGITHUB:\n'));
     el.appendChild(repoLink);
-    el.appendChild(document.createTextNode('\n\nLINKEDIN:\n' + c.linkedin));
+    const linkedinLink = document.createElement('a');
+    linkedinLink.href = c.linkedin;
+    linkedinLink.target = '_blank';
+    linkedinLink.rel = 'noopener noreferrer';
+    linkedinLink.className = 'text-secondary underline';
+    linkedinLink.textContent = c.linkedin;
+    el.appendChild(document.createTextNode('\n\nLINKEDIN:\n'));
+    el.appendChild(linkedinLink);
     whoamiOutput.appendChild(el);
 }
