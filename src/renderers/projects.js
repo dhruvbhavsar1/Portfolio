@@ -153,6 +153,10 @@ export async function renderProjectDetailsCommand(projectId) {
         title.className = 'text-primary text-lg font-bold';
         title.textContent = project.name.toUpperCase();
         wrapper.appendChild(title);
+        const mobileNote = document.createElement('div');
+        mobileNote.className = 'block md:hidden border border-outline-variant bg-surface-container-high/60 text-on-surface-variant text-[11px] px-3 py-2 rounded-sm';
+        mobileNote.textContent = 'For the best reading experience, this project detail page is optimized for desktop screens. Mobile view is supported but may appear condensed.';
+        wrapper.appendChild(mobileNote);
         const divider = document.createElement('div');
         divider.className = 'h-px bg-outline-variant';
         wrapper.appendChild(divider);
