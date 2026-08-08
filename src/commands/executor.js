@@ -22,7 +22,7 @@ function renderHelp() {
     const output = elements.whoamiOutput();
     const help = document.createElement('pre');
     help.className = 'p-4 border border-outline-variant bg-surface-container-lowest/50 font-code-sm whitespace-pre-wrap text-on-surface';
-    help.textContent = `AVAILABLE COMMANDS\n\n  help            Show available commands\n  whoami          Display profile\n  about           Display about information\n  projects        Browse projects\n  skills          Display technical skills\n  experience      Display experience\n  education       Display education\n  certifications  Display certifications\n  services        Display services\n  contact         Display contact information\n  github          Open GitHub profile\n  clear           Clear terminal`;
+    help.textContent = `AVAILABLE COMMANDS\n\n  help            Show available commands\n  whoami          Display profile\n  about           Display about information\n  projects        Browse projects\n  project <name>  Show detailed project information\n  details <name>  Alias for project <name>\n  skills          Display technical skills\n  experience      Display experience\n  education       Display education\n  certifications  Display certifications\n  services        Display services\n  contact         Display contact information\n  github          Open GitHub profile\n  clear           Clear terminal`;
     output?.appendChild(help);
 }
 
@@ -32,6 +32,15 @@ function renderUnknown(command) {
     message.className = 'font-code-sm whitespace-pre-wrap text-error';
     message.textContent = `bash: ${command}: command not found\n\nType 'help' for available commands.`;
     output?.appendChild(message);
+}
+
+function renderIdleWorkspace() {
+    const workspace = elements.terminalHistory();
+    if (!workspace) return;
+    const idle = document.createElement('div');
+    idle.className = 'terminal-idle font-code-sm mt-4';
+    idle.innerHTML = '<div class="text-on-surface-variant">[workspace cleared]</div><div class="mt-4 text-on-surface-variant">Type <span class="text-secondary">\'help\'</span> to view available commands.</div><div class="text-on-surface-variant">Use ↑ ↓ for command history.</div><div class="mt-5 text-primary">[SYSTEM READY] <span class="text-on-surface-variant">waiting for command</span> <span aria-hidden="true">█</span></div>';
+    workspace.appendChild(idle);
 }
 
 function renderLoading() {
@@ -85,6 +94,7 @@ export async function executeCommand(input, { record = true, focus = true, anima
         elements.terminalHistory().replaceChildren();
         elements.projectsView()?.classList.add('hidden');
         elements.interactiveMenu()?.classList.add('hidden');
+        renderIdleWorkspace();
         elements.setActiveOutput(null);
         if (focus) elements.terminalInput()?.focus();
         return { command, cleared: true };

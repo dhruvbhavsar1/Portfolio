@@ -4,17 +4,38 @@ export function renderSkills(){
     const whoamiOutput = elements.whoamiOutput();
     whoamiOutput.innerHTML = '';
     const el = document.createElement('div');
-    el.className = 'p-4 border border-outline-variant bg-surface-container-lowest/50 font-code-sm';
-    let html = 'SKILLS.BIN\n\nLANGUAGES\n';
-    portfolioData.skills.languages.forEach(l => html += `├── ${l}\n`);
-    html += '\nFRAMEWORKS\n';
-    portfolioData.skills.frameworks.forEach(f => html += `├── ${f}\n`);
-    html += '\nBACKEND & DATABASE\n';
-    portfolioData.skills.backend.forEach(b => html += `├── ${b}\n`);
-    html += '\nTOOLS\n';
-    portfolioData.skills.tools.forEach(t => html += `├── ${t}\n`);
-    html += '\nCONCEPTS\n';
-    portfolioData.skills.concepts.forEach(c => html += `├── ${c}\n`);
+    el.className = 'p-4 border border-outline-variant bg-surface-container-lowest/50 font-code-sm whitespace-pre-wrap text-on-surface';
+    const sections = [
+        {
+            title: 'LANGUAGES',
+            items: portfolioData.skills.languages
+        },
+        {
+            title: 'FRAMEWORKS',
+            items: portfolioData.skills.frameworks
+        },
+        {
+            title: 'BACKEND / DATABASE',
+            items: portfolioData.skills.backend
+        },
+        {
+            title: 'TOOLS',
+            items: portfolioData.skills.tools
+        },
+        {
+            title: 'CONCEPTS',
+            items: portfolioData.skills.concepts
+        }
+    ];
+    let html = 'SKILLS.BIN\n';
+    html += '──────────────────────────────\n\n';
+    sections.forEach((section, index) => {
+        html += `${section.title}\n`;
+        section.items.forEach((item) => {
+            html += `  • ${item}\n`;
+        });
+        if (index < sections.length - 1) html += '\n';
+    });
     el.textContent = html;
     whoamiOutput.appendChild(el);
 }

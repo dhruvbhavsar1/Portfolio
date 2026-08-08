@@ -1,0 +1,2192 @@
+CHARITY APP — COMPLETE ARCHITECTURE & DATA FLOW DOCUMENT
+============================================================
+
+Document purpose
+----------------
+This document describes the Charity App architecture, technology stack,
+data flow, storage model, Firebase usage, caching strategy, product flow,
+order flow, authentication, media handling, optimization strategy, and
+important architectural rules.
+
+IMPORTANT:
+This document distinguishes between:
+1. Architecture/features already discussed as part of the current app.
+2. Optimization ideas that were planned/discussed but must not be assumed
+   to be fully implemented unless verified against the latest source code.
+
+============================================================
+1. APPLICATION OVERVIEW
+============================================================
+
+The Charity App is a Flutter mobile application backed primarily by Firebase.
+
+The high-level architecture is:
+
+                    +---------------------+
+                    |     Flutter App     |
+                    |       Android       |
+                    +----------+----------+
+                               |
+              +----------------+----------------+
+              |                |                |
+              v                v                v
+       Firebase Auth    Cloud Firestore    Storage/
+                                           Image Service
+              |                |                |
+              +----------------+----------------+
+                               |
+                         App State / Cache
+                               |
+                    +----------+----------+
+                    |                     |
+                Provider              Hive /
+              State Management       Local Cache
+
+
+Core architectural principle:
+
+Firebase is the cloud source of truth for shared application data.
+Flutter is the application/UI layer.
+Provider manages runtime state.
+Hive/local storage is used for persistent caching and offline-oriented
+behavior.
+Media is handled separately from normal database documents.
+
+============================================================
+2. TECHNOLOGY STACK
+============================================================
+
+Frontend:
+- Flutter
+- Dart
+- Material UI
+- Provider
+
+Firebase:
+- Firebase Core
+- Firebase Authentication
+- Cloud Firestore
+- Firebase Storage
+
+Local/device:
+- Hive
+- SharedPreferences
+- Path Provider
+- Connectivity Plus
+- Cached image storage
+
+Other packages/features discussed in the project:
+- cached_network_image
+- image_picker
+- flutter_image_compress
+- flutter_dotenv
+- http
+- intl
+- pdf
+- printing
+- url_launcher
+- shimmer
+- badges
+
+Package responsibilities:
+
+firebase_core
+-------------
+Initializes Firebase inside the Flutter application.
+
+firebase_auth
+-------------
+Handles user authentication and authentication state.
+
+cloud_firestore
+---------------
+Cloud NoSQL database used for shared application data such as:
+- users
+- products
+- orders
+- configuration/application data
+
+firebase_storage
+----------------
+Used for file/media storage where applicable.
+
+provider
+--------
+Runtime state-management layer.
+Providers expose application data to screens/widgets and notify the UI
+when data changes.
+
+hive
+----
+Local persistent storage/cache.
+Useful for:
+- product catalog caching
+- offline data
+- persistent local state
+- reducing repeated Firestore reads
+
+shared_preferences
+------------------
+Small key/value local storage.
+Suitable for:
+- flags
+- simple settings
+- first-launch state
+- version values
+- lightweight preferences
+
+path_provider
+-------------
+Provides application/device filesystem paths.
+
+connectivity_plus
+-----------------
+Detects network connectivity changes.
+It should be treated as a connectivity hint, not absolute proof that
+Firebase is reachable.
+
+cached_network_image
+--------------------
+Displays remote images while providing image caching to reduce repeated
+image downloads.
+
+image_picker
+------------
+Selects images from the device.
+
+flutter_image_compress
+----------------------
+Compresses images before upload to reduce file size, bandwidth and storage.
+
+flutter_dotenv
+--------------
+Loads configuration/environment values.
+IMPORTANT: mobile application environment values are not a true secret store,
+because values shipped inside an APK can potentially be extracted.
+
+http
+----
+Used for HTTP requests where required.
+
+intl
+----
+Date/number/local formatting.
+
+pdf
+---
+Creates PDF documents/reports.
+
+printing
+--------
+Print/share/save PDF output.
+
+url_launcher
+------------
+Opens external URLs/app links such as websites, WhatsApp links, phone links,
+or payment/UPI-related intents where applicable.
+
+shimmer
+-------
+Loading placeholders while data is being fetched.
+
+badges
+------
+UI badges and indicators.
+
+============================================================
+3. HIGH-LEVEL SOFTWARE ARCHITECTURE
+============================================================
+
+The preferred application structure is:
+
+UI / Screens / Widgets
+        |
+        v
+Provider / State Management
+        |
+        v
+Services / Repository / Data Layer
+        |
+        +--------------------+
+        |                    |
+        v                    v
+      Hive               Firebase
+                           |
+               +-----------+-----------+
+               |           |           |
+               v           v           v
+             Auth      Firestore    Storage
+               |
+               v
+             Models
+               |
+               v
+           Provider
+               |
+               v
+              UI
+
+
+The important separation is:
+
+UI should display data.
+Provider should manage runtime state.
+Services/repositories should perform data operations.
+Models should represent structured application data.
+Firebase/Hive should handle persistence/cache.
+
+The UI should not ideally contain repeated raw Firestore logic everywhere.
+
+============================================================
+4. AUTHENTICATION ARCHITECTURE
+============================================================
+
+Firebase Authentication manages identity.
+
+Basic flow:
+
+User
+ |
+ v
+Login/Register
+ |
+ v
+Firebase Authentication
+ |
+ v
+Firebase verifies credentials
+ |
+ v
+Authenticated Firebase User
+ |
+ v
+Firebase UID
+ |
+ v
+Application loads user-related Firestore data
+ |
+ v
+Application UI
+
+
+Firebase Authentication handles:
+- identity
+- login
+- logout
+- authentication state
+- password reset where configured
+- email authentication where configured
+
+Passwords should not be manually stored in normal Firestore user documents.
+
+============================================================
+5. USER DATA ARCHITECTURE
+============================================================
+
+There are two different types of user data.
+
+A) Authentication data
+----------------------
+Managed by Firebase Authentication.
+
+Conceptually:
+- UID
+- email
+- authentication state
+
+B) Application profile data
+---------------------------
+Managed by Firestore.
+
+Conceptually:
+
+users
+  |
+  +-- UID
+       +-- name
+       +-- phone
+       +-- address
+       +-- role
+       +-- other application-specific information
+
+
+The Firebase UID connects Authentication with the user's Firestore document.
+
+Conceptual relationship:
+
+Firebase Auth
+     |
+     | UID
+     v
+Firestore users/{uid}
+
+
+============================================================
+6. FIRESTORE DATA
+============================================================
+
+Cloud Firestore is the primary cloud database.
+
+Conceptually, collections include:
+
+users
+products
+orders
+configuration/application data
+
+
+Example structure:
+
+Firestore
+ |
+ +-- users
+ |
+ +-- products
+ |
+ +-- orders
+ |
+ +-- configuration
+
+
+Exact collection names and fields must be verified against the latest
+source code before being treated as a strict schema contract.
+
+============================================================
+7. PRODUCT ARCHITECTURE
+============================================================
+
+Products are a major part of the application.
+
+Conceptual structure:
+
+products
+ |
+ +-- product A
+ +-- product B
+ +-- product C
+ +-- ...
+
+
+A product document can contain information such as:
+- productId
+- name
+- description
+- price
+- image URL
+- category
+- availability
+- stock-related information
+- other product metadata
+
+
+The exact current fields depend on the application's Product model/schema.
+
+============================================================
+8. PRODUCT DATA FLOW
+============================================================
+
+The preferred flow is:
+
+Product Screen
+     |
+     v
+Product Provider
+     |
+     v
+Product Service / Repository
+     |
+     +----------------+
+     |                |
+     v                v
+   Hive           Firestore
+     |                |
+     +--------+-------+
+              |
+              v
+        Product Model
+              |
+              v
+        Product Provider
+              |
+              v
+          Product UI
+
+
+When data comes from Firestore:
+
+Firestore document
+        |
+        v
+Map<String, dynamic>
+        |
+        v
+Product.fromFirestore(...)
+        |
+        v
+Product object/model
+        |
+        v
+Provider
+        |
+        v
+Product screen
+
+
+The UI should work with Product objects/models rather than scattering raw
+Firestore document interpretation throughout widgets.
+
+============================================================
+9. PRODUCT IMAGES
+============================================================
+
+Product metadata and product images are logically separate.
+
+Conceptual structure:
+
+Firestore
+ |
+ +-- Product metadata
+     +-- name
+     +-- price
+     +-- description
+     +-- image URL
+
+Image/file service
+ |
+ +-- Actual image file
+
+
+The app receives an image URL and displays the image using cached image
+handling where applicable.
+
+Typical flow:
+
+Image URL
+ |
+ v
+cached_network_image
+ |
+ v
+Local image cache
+ |
+ v
+Display
+
+
+The benefit is that an already downloaded image can be reused instead of
+being downloaded repeatedly.
+
+============================================================
+10. IMAGE UPLOAD FLOW
+============================================================
+
+When an administrator selects an image:
+
+Device
+ |
+ v
+image_picker
+ |
+ v
+Selected image
+ |
+ v
+flutter_image_compress
+ |
+ v
+Upload to image/file storage
+ |
+ v
+Image URL
+ |
+ v
+Store URL in Firestore product metadata
+
+
+Image compression is important because unnecessarily large images increase:
+- upload time
+- bandwidth usage
+- storage usage
+- download time
+
+============================================================
+11. PRODUCT CACHING
+============================================================
+
+Product data changes less frequently than orders, so it is a good candidate
+for aggressive caching.
+
+Basic current/previous approach:
+
+getProductsOnce()
+      |
+      v
+Load products once
+      |
+      v
+Keep product list in memory
+
+
+The improved architecture discussed for the project is:
+
+Memory cache
+     |
+     v
+Hive persistent cache
+     |
+     v
+Firestore authoritative source
+
+
+Three-level product access can be:
+
+Product request
+     |
+     v
+Memory cache?
+   /       \
+ YES       NO
+ |          |
+ v          v
+Return     Hive?
+           /  \
+         YES   NO
+          |     |
+          v     v
+        Return Firestore
+                  |
+                  v
+                 Hive
+                  |
+                  v
+                Memory
+                  |
+                  v
+                  UI
+
+
+This minimizes unnecessary Firestore reads.
+
+============================================================
+12. CATALOG VERSION SYSTEM
+============================================================
+
+A catalog version system was discussed as a major optimization.
+
+Instead of downloading the entire product catalog every time:
+
+App opens
+ |
+ v
+Check catalog/version metadata
+ |
+ v
+Compare local version with cloud version
+ |
+ +------------------------+
+ |                        |
+ v                        v
+Same version          Different version
+ |                        |
+ v                        v
+Use local catalog      Download updated data
+                            |
+                            v
+                          Hive
+                            |
+                            v
+                           UI
+
+
+Example:
+
+Local catalogVersion = 17
+Cloud catalogVersion = 17
+
+17 == 17
+ |
+ v
+Do not download the entire catalog.
+
+
+If:
+
+Local = 17
+Cloud = 18
+
+Then:
+- catalog changed
+- fetch/update required data
+- update local Hive cache
+- use updated local catalog
+
+
+IMPORTANT:
+The catalog-version system was a planned optimization discussed for the
+project. Do not claim it is completely implemented without checking the
+latest source code.
+
+============================================================
+13. PRODUCT CHANGE IDS
+============================================================
+
+Another optimization discussed was identifying product changes more
+efficiently.
+
+A product/catalog change identifier can help determine whether a product
+needs updating.
+
+Conceptual approach:
+
+Product/catalog change ID
+          |
+          v
+Compare local state
+          |
+          v
+Changed?
+       /     \
+     NO       YES
+     |         |
+     v         v
+Keep local   Fetch update
+
+
+The exact implementation should be verified in the current source.
+
+============================================================
+14. PRODUCT DATA VS STOCK DATA
+============================================================
+
+Product catalog data and stock data should not necessarily have the same
+refresh policy.
+
+Product catalog:
+- name
+- description
+- image
+- category
+- relatively stable price information
+
+These can be cached aggressively.
+
+Stock:
+- available quantity
+- rapidly changing inventory information
+
+Stock may need more frequent refreshes because stale stock can cause
+incorrect availability.
+
+Therefore a possible optimized strategy is:
+
+Product catalog
+    |
+    v
+Longer local cache
+
+Stock
+    |
+    v
+More frequent refresh / validation
+
+
+The exact refresh policy depends on the business requirements.
+
+============================================================
+15. HIVE ARCHITECTURE
+============================================================
+
+Hive is intended to act as persistent local storage/cache.
+
+Provider and Hive have different purposes.
+
+Provider:
+- runtime application state
+- fast access while the app is running
+- UI notification/rebuild
+
+Hive:
+- persistent local data
+- survives application restart
+- cached product data
+- offline-oriented access
+
+
+Example:
+
+Firestore
+    |
+    v
+Provider
+    |
+    v
+Hive
+
+
+When the app is reopened:
+
+Hive
+ |
+ v
+Provider
+ |
+ v
+UI
+
+
+Hive should be treated as a cached/local representation of appropriate data,
+not automatically as the authoritative source for shared cloud data.
+
+============================================================
+16. THREE LEVELS OF CACHING
+============================================================
+
+The optimized product architecture is:
+
+                Product request
+                      |
+                      v
+               Memory cache?
+                /          \
+              YES           NO
+              |              |
+              v              v
+           Return          Hive?
+                            /  \
+                          YES   NO
+                           |     |
+                           v     v
+                        Return Firestore
+                                 |
+                                 v
+                                Hive
+                                 |
+                                 v
+                               Memory
+                                 |
+                                 v
+                                 UI
+
+
+Priority:
+1. Memory = fastest
+2. Hive = persistent local cache
+3. Firestore = cloud source of truth
+
+
+============================================================
+17. PROVIDER STATE MANAGEMENT
+============================================================
+
+Provider is the runtime state-management layer.
+
+Conceptually:
+
+Firestore/Hive
+      |
+      v
+Service
+      |
+      v
+Provider
+      |
+      v
+notifyListeners()
+      |
+      v
+Widgets rebuild
+
+
+Example:
+
+ProductProvider contains a product list.
+
+When the list changes:
+- provider updates state
+- provider notifies listeners
+- product widgets rebuild
+- UI displays updated information
+
+This avoids every widget having to independently query Firestore.
+
+============================================================
+18. APPLICATION STARTUP
+============================================================
+
+A simplified startup sequence is:
+
+Application starts
+ |
+ v
+Flutter initialization
+ |
+ v
+Firebase initialization
+ |
+ v
+Local storage initialization
+ |
+ v
+Authentication state check
+ |
+ v
+Determine current user
+ |
+ v
+Load only required application data
+ |
+ v
+Populate providers/cache
+ |
+ v
+Display appropriate screen
+
+
+Not all application data should be loaded at startup.
+
+============================================================
+19. WHY NOT LOAD EVERYTHING AT STARTUP
+============================================================
+
+Bad pattern:
+
+App starts
+ |
+ +-- Load all users
+ +-- Load all products
+ +-- Load all orders
+ +-- Load all reports
+ +-- Load everything
+ |
+ v
+Finally show Home
+
+
+Problems:
+- slow startup
+- unnecessary Firestore reads
+- unnecessary network traffic
+- increased Firebase usage
+- higher cost
+- larger memory usage
+
+
+Better pattern:
+
+App starts
+ |
+ v
+Load required data
+ |
+ v
+Show UI
+ |
+ v
+Load additional data when required
+
+
+============================================================
+20. OFFLINE-FIRST ARCHITECTURE
+============================================================
+
+The application is intended to move toward an offline-first approach.
+
+Conceptual architecture:
+
+                 APP
+                  |
+          +-------+-------+
+          |               |
+       Local            Network
+       Hive             Firebase
+          |               |
+          +-------+-------+
+                  |
+              Data Layer
+                  |
+                  v
+                  UI
+
+
+When internet is available:
+- cloud data can be fetched
+- local cache can be updated
+
+When internet is unavailable:
+- cached data can continue to be displayed where appropriate
+
+
+For product browsing:
+
+Internet unavailable
+        |
+        v
+Hive product catalog
+        |
+        v
+Product Provider
+        |
+        v
+Product UI
+
+
+When internet returns:
+
+Internet restored
+ |
+ v
+Check cloud/catalog version
+ |
+ +------------------+
+ |                  |
+ v                  v
+No change         Changed
+ |                  |
+ v                  v
+Keep cache       Fetch/update
+                    |
+                    v
+                  Hive
+                    |
+                    v
+                   UI
+
+
+============================================================
+21. CONNECTIVITY PLUS
+============================================================
+
+connectivity_plus can tell the app about network connectivity changes.
+
+Example:
+
+Internet available?
+      |
+   +--+--+
+   |     |
+  YES    NO
+   |     |
+   v     v
+Firebase Hive/cache
+
+
+IMPORTANT:
+Connectivity detection does not guarantee that Firebase itself is reachable.
+Network status should be treated as a hint rather than an absolute guarantee
+of successful database access.
+
+============================================================
+22. SHARED PREFERENCES
+============================================================
+
+SharedPreferences is intended for small local values, not large datasets.
+
+Examples:
+- firstLaunch
+- onboardingCompleted
+- simple settings
+- selected preferences
+- local version flags
+
+Conceptual storage:
+
+key -> value
+
+
+It should not replace:
+- Firestore
+- Hive
+- authentication
+
+============================================================
+23. ORDERS
+============================================================
+
+Orders are different from products because orders change more frequently.
+
+Basic order flow:
+
+User
+ |
+ v
+Select product
+ |
+ v
+Product details
+ |
+ v
+Cart
+ |
+ v
+Checkout
+ |
+ v
+Create order
+ |
+ v
+Firestore
+ |
+ v
+Order document
+
+
+Conceptual Firestore structure:
+
+orders
+ |
+ +-- order001
+ |     +-- userId
+ |     +-- items
+ |     +-- total
+ |     +-- status
+ |     +-- timestamps
+ |
+ +-- order002
+ |
+ +-- order003
+
+
+Exact current fields should be verified against the latest Order model/schema.
+
+============================================================
+24. ORDER ITEMS
+============================================================
+
+An order should contain enough information to preserve what was ordered.
+
+Conceptually:
+
+Order
+ |
+ +-- orderId
+ +-- userId
+ +-- items
+ |     |
+ |     +-- productId
+ |     +-- productName
+ |     +-- quantity
+ |     +-- price
+ |     +-- other required snapshot information
+ |
+ +-- total
+ +-- status
+ +-- createdAt
+
+
+IMPORTANT:
+An old order should not depend entirely on today's product document.
+
+Example:
+
+Today:
+Product price = Rs. 100
+
+Later:
+Product price = Rs. 120
+
+An old order should still be able to show the price that was used when
+the order was created.
+
+Therefore order items should preserve the relevant order-time snapshot
+information.
+
+============================================================
+25. CART
+============================================================
+
+The cart is temporary application state between product selection and
+order creation.
+
+Example:
+
+Product A x 2
+Product B x 1
+
+
+The cart calculates:
+- quantities
+- subtotal
+- total
+- selected items
+
+
+Flow:
+
+Product catalog
+ |
+ v
+Cart
+ |
+ v
+Checkout
+ |
+ v
+Order
+
+
+The cart is not the same thing as the permanent order.
+
+============================================================
+26. COMPLETE PURCHASE FLOW
+============================================================
+
+                    FIRESTORE
+                        |
+                        | products
+                        v
+                 Product Service
+                        |
+                        v
+                 Product Provider
+                        |
+                        v
+                   Product UI
+                        |
+                   user selects
+                        |
+                        v
+                      Cart
+                        |
+                    checkout
+                        |
+                        v
+                  Create Order
+                        |
+                        v
+                    Firestore
+                        |
+                        v
+                     orders
+                        |
+                        v
+                 Order Provider
+                        |
+                        v
+                Order History UI
+
+
+============================================================
+27. ORDER READ FLOW
+============================================================
+
+For a normal logged-in user:
+
+Firebase Auth
+ |
+ v
+Current UID
+ |
+ v
+Firestore order query
+ |
+ v
+Matching orders
+ |
+ v
+Order.fromFirestore()
+ |
+ v
+Order Provider
+ |
+ v
+Order History Screen
+
+
+For administrators:
+
+Admin login
+ |
+ v
+Authentication
+ |
+ v
+Role/permission verification
+ |
+ v
+Orders
+ |
+ v
+Firestore
+ |
+ v
+Admin order list
+
+
+Queries should be designed to avoid downloading unnecessary historical
+orders.
+
+============================================================
+28. ORDER READ OPTIMIZATION
+============================================================
+
+Orders can become much larger than the product catalog.
+
+Example:
+
+500 products may be stable.
+
+10,000+ orders may accumulate over time.
+
+Downloading all orders every time is inefficient.
+
+Preferred techniques:
+- filters
+- date ranges
+- pagination
+- limits
+- appropriate Firestore indexes
+- loading only required records
+
+
+Bad:
+
+Admin opens orders
+ |
+ v
+Download every order ever created
+
+
+Better:
+
+Admin opens orders
+ |
+ v
+Load recent/required records
+ |
+ v
+Pagination/date filters
+ |
+ v
+Load more only when needed
+
+
+============================================================
+29. ORDER ARCHIVING STRATEGY
+============================================================
+
+An optimization discussed for the project was:
+
+Recent orders
+ |
+ v
+Firestore
+
+Older orders
+ |
+ v
+Archive/export
+ |
+ +-- PDF
+ +-- Excel/other archive
+ |
+ v
+Potentially remove old active documents from Firestore
+
+
+The discussed idea was to keep approximately the last 2-3 months of active
+order history in Firestore and archive older records.
+
+IMPORTANT:
+This is an optimization strategy discussed for the project, not a statement
+that automatic archival is already fully implemented.
+
+Before deleting cloud data, the final implementation must guarantee:
+- successful archive
+- administrator access
+- backup/recovery strategy
+- correct business/legal retention requirements
+
+============================================================
+30. ADMIN ARCHITECTURE
+============================================================
+
+The application can expose different capabilities based on the user's role.
+
+Conceptually:
+
+                    Firebase Auth
+                         |
+                         v
+                     User UID
+                         |
+                         v
+                    User profile
+                         |
+                         v
+                        Role
+                    /           \
+                  User         Admin
+                   |             |
+                   v             v
+              Customer UI    Admin Dashboard
+                                  |
+                       +----------+----------+
+                       |          |          |
+                       v          v          v
+                    Products    Orders     Users
+
+
+Possible roles discussed:
+- super_admin
+- admin
+- user
+- volunteer
+
+
+The exact roles and permissions must be verified against the current
+implementation.
+
+============================================================
+31. FIRESTORE SECURITY
+============================================================
+
+A major security principle:
+
+DO NOT rely only on hiding UI buttons.
+
+For example, this type of broad rule is unsafe for production:
+
+allow read, write: if true;
+
+
+Security must be enforced at the backend/Firestore rule level.
+
+Conceptual permissions:
+
+User:
+- read allowed personal data
+- create allowed orders
+- read own orders
+- cannot arbitrarily modify admin/product data
+
+Admin:
+- manage products
+- manage orders
+- manage allowed users
+
+Super Admin:
+- broader/full administrative permissions
+
+
+Exact Firestore security rules must be checked against the current project
+before deployment.
+
+============================================================
+32. FIREBASE STORAGE VS FIRESTORE
+============================================================
+
+Firestore:
+- structured application data
+- product metadata
+- user profile/application data
+- orders
+- configuration
+
+Storage:
+- images
+- files
+- other binary media
+
+
+Conceptual:
+
+Firestore:
+product.imageUrl = "..."
+
+Storage:
+actual image file
+
+
+Do not store large binary images directly as ordinary Firestore fields.
+
+============================================================
+33. LOADING STATES
+============================================================
+
+The application uses loading UI concepts such as Shimmer.
+
+Typical flow:
+
+Open Product Screen
+ |
+ v
+Loading state
+ |
+ v
+Shimmer cards
+ |
+ v
+Firebase/Hive response
+ |
+ v
+Real product cards
+
+
+This improves perceived performance and prevents the UI from looking broken
+while data is loading.
+
+============================================================
+34. ERROR HANDLING
+============================================================
+
+General data-state model:
+
+Request
+ |
+ v
+Loading
+ |
+ +-------------------+
+ |                   |
+ v                   v
+Success             Error
+ |                   |
+ v                   v
+Display data       Error handling
+                     |
+                     v
+              Try cached data where
+              appropriate
+
+
+Example:
+
+Firestore unavailable
+ |
+ v
+Check local cache
+ |
+ +-------------------+
+ |                   |
+ v                   v
+Cache exists       No cache
+ |                   |
+ v                   v
+Display cached      Show error/
+data                retry state
+
+
+============================================================
+35. PDF GENERATION
+============================================================
+
+The app includes PDF-related functionality.
+
+Flow:
+
+Firestore/local data
+ |
+ v
+Flutter models
+ |
+ v
+PDF generator
+ |
+ v
+PDF document
+ |
+ v
+Printing/share/save
+
+
+Possible use cases:
+- reports
+- order records
+- receipts
+- archives
+- exports
+
+
+============================================================
+36. EXTERNAL LINKS / URL LAUNCHING
+============================================================
+
+url_launcher allows the app to open external destinations.
+
+Conceptual:
+
+Flutter
+ |
+ v
+URL launcher
+ |
+ +-- Browser
+ +-- WhatsApp
+ +-- Phone link
+ +-- Website
+ +-- Payment/UPI intent where applicable
+
+
+============================================================
+37. ENVIRONMENT CONFIGURATION
+============================================================
+
+flutter_dotenv can keep configuration values separate from ordinary Dart
+source code.
+
+Conceptual:
+
+Application
+ |
+ v
+Environment/configuration
+ |
+ v
+Application settings/API configuration
+
+
+IMPORTANT:
+Anything shipped inside a mobile APK should not be treated as a secret.
+Client-side environment files do not provide strong secrecy.
+
+Actual server secrets should be kept on trusted backend infrastructure.
+
+============================================================
+38. COMPLETE DATA-LAYER MODEL
+============================================================
+
+The application can be understood as having these layers:
+
+1. UI layer
+2. State-management layer
+3. Service/repository/data-access layer
+4. Local-cache layer
+5. Firebase/cloud layer
+6. Model layer
+
+
+Expanded:
+
+                         Flutter UI
+                            |
+                            v
+                   Provider / State
+                            |
+                            v
+                  Services / Repository
+                    /                 \
+                   /                   \
+                  v                     v
+                Hive                 Firebase
+                  |                     |
+                  |              +------+------+
+                  |              |      |      |
+                  |              v      v      v
+                  |            Auth Firestore Storage
+                  |                     |
+                  |              +------+------+
+                  |              |      |      |
+                  |              v      v      v
+                  |            Users Products Orders
+                  |
+                  v
+             Local cached data
+                  |
+                  +------------+
+                               |
+                               v
+                              UI
+
+
+============================================================
+39. COMPLETE APP STARTUP DATA FLOW
+============================================================
+
+Application launch
+ |
+ v
+Flutter initialization
+ |
+ v
+Firebase initialization
+ |
+ v
+Hive/local storage initialization
+ |
+ v
+Authentication state check
+ |
+ v
+Current user identified
+ |
+ v
+Role/profile information loaded if required
+ |
+ v
+Required application data loaded
+ |
+ +-----------------------------+
+ |                             |
+ v                             v
+Local cache                 Firebase
+ |                             |
+ +-------------+---------------+
+               |
+               v
+             Models
+               |
+               v
+            Provider
+               |
+               v
+               UI
+
+
+============================================================
+40. COMPLETE PRODUCT DISPLAY EXAMPLE
+============================================================
+
+Suppose Firestore contains:
+
+products/p001
+
+with conceptual values:
+
+name = "Product A"
+price = 500
+imageUrl = "..."
+
+
+Flow:
+
+Firestore document
+ |
+ v
+Map<String, dynamic>
+ |
+ v
+Product.fromFirestore(...)
+ |
+ v
+Product object
+ |
+ v
+ProductProvider
+ |
+ v
+notifyListeners()
+ |
+ v
+ProductScreen rebuild
+ |
+ v
+ProductCard
+ |
+ v
+cached_network_image
+ |
+ v
+Image displayed
+
+
+If Hive caching is used:
+
+Hive
+ |
+ v
+Product object/list
+ |
+ v
+Provider
+ |
+ v
+ProductScreen
+
+
+============================================================
+41. COMPLETE ORDER CREATION EXAMPLE
+============================================================
+
+User selects:
+
+Product A x 2
+
+
+Then:
+
+Product
+ |
+ v
+Cart
+ |
+ v
+Quantity = 2
+ |
+ v
+Calculate subtotal
+ |
+ v
+Checkout
+ |
+ v
+Create Order model
+ |
+ v
+Write order to Firestore
+ |
+ v
+Order ID generated/recorded
+ |
+ v
+Success
+ |
+ v
+Clear cart
+ |
+ v
+Show confirmation
+ |
+ v
+Order becomes available in order history
+
+
+============================================================
+42. COMPLETE ORDER HISTORY EXAMPLE
+============================================================
+
+User opens Orders:
+
+Orders screen
+ |
+ v
+Firebase Auth
+ |
+ v
+Current UID
+ |
+ v
+Firestore query
+ |
+ v
+Orders belonging to current user
+ |
+ v
+Order.fromFirestore()
+ |
+ v
+Order Provider
+ |
+ v
+Order History UI
+
+
+============================================================
+43. COMPLETE OFFLINE PRODUCT EXAMPLE
+============================================================
+
+Scenario:
+User has previously loaded products.
+Internet is now unavailable.
+
+Flow:
+
+Product screen
+ |
+ v
+Product Provider
+ |
+ v
+Hive
+ |
+ v
+Cached product catalog
+ |
+ v
+Product UI
+
+
+When internet returns:
+
+Internet restored
+ |
+ v
+Catalog/version check
+ |
+ v
+Cloud changed?
+ |
+ +--------------------+
+ |                    |
+ v                    v
+No                    Yes
+ |                    |
+ v                    v
+Keep local          Firestore
+                        |
+                        v
+                     Update Hive
+                        |
+                        v
+                       UI
+
+
+============================================================
+44. FIRESTORE READ OPTIMIZATION
+============================================================
+
+The central optimization principle is:
+
+DO NOT READ DATA THAT THE USER DOES NOT NEED.
+
+Examples:
+
+Bad:
+- download all products on every screen
+- download all orders for every user
+- repeatedly request unchanged data
+
+Better:
+- cache stable catalog data
+- check versions
+- query only required orders
+- paginate large lists
+- separate rapidly changing data such as stock
+- load data when required
+- keep frequently used data in memory
+- persist useful stable data locally
+
+
+============================================================
+45. FIRESTORE COST MODEL — WHY OPTIMIZATION MATTERS
+============================================================
+
+Firestore usage is affected by document reads, writes, storage and other
+Firebase services.
+
+A simple conceptual problem:
+
+1000 users
+x
+500 product documents
+=
+500,000 document reads
+
+If the entire product catalog were unnecessarily fetched repeatedly by
+many users, reads can grow rapidly.
+
+Therefore caching is important.
+
+The optimization goal is not merely:
+"make Firebase faster."
+
+It is:
+"avoid unnecessary network operations and unnecessary document reads while
+maintaining correct data."
+
+
+============================================================
+46. PRODUCT CATALOG OPTIMIZATION PLAN
+============================================================
+
+Target architecture:
+
+             Firestore
+                 |
+                 v
+          Catalog version
+                 |
+                 v
+        Is local cache current?
+             /          \
+           YES           NO
+            |             |
+            v             v
+       Use Hive       Fetch updates
+                          |
+                          v
+                         Hive
+                          |
+                          v
+                       Provider
+                          |
+                          v
+                          UI
+
+
+Potential additions discussed:
+- permanent Hive catalog
+- catalog version
+- product change IDs
+- memory cache
+- stock-specific refresh
+- avoid repeated full catalog reads
+
+
+============================================================
+47. IMPORTANT DIFFERENCE: CURRENT VS PLANNED
+============================================================
+
+Known/current project architecture discussed:
+- Flutter/Dart application
+- Firebase integration
+- Firebase Authentication
+- Cloud Firestore
+- Provider
+- local caching/storage components
+- product data
+- order data
+- image handling
+- loading states
+- PDF functionality
+- external links
+
+Optimization ideas discussed/planned:
+- permanent Hive product catalog
+- catalog version system
+- product change IDs
+- three-level cache
+- more aggressive read minimization
+- stock-specific refresh policy
+- order pagination improvements
+- order archival
+- more granular Firestore queries
+
+
+Do not represent a planned optimization as an already completed feature unless
+the latest source code confirms it.
+
+============================================================
+48. ARCHITECTURAL RULES FOR FUTURE DEVELOPMENT
+============================================================
+
+Rule 1:
+Do not put repeated Firestore queries directly inside UI widgets.
+
+Preferred:
+UI -> Provider -> Service/Repository -> Firebase/Hive
+
+
+Rule 2:
+Keep models responsible for converting data into structured objects.
+
+
+Rule 3:
+Keep Firebase as the cloud source of truth for shared data.
+
+
+Rule 4:
+Treat Hive as a local cache/local persistence layer unless the specific
+feature is explicitly designed for local-only data.
+
+
+Rule 5:
+Do not cache rapidly changing data indefinitely.
+
+
+Rule 6:
+Do not download entire large collections when only a small subset is needed.
+
+
+Rule 7:
+Use pagination/limits/date filtering for large order collections.
+
+
+Rule 8:
+Do not rely on UI hiding for security.
+
+
+Rule 9:
+Enforce authorization through Firebase/Firestore security rules.
+
+
+Rule 10:
+Do not place real secrets inside a mobile application's client-side
+environment configuration.
+
+
+Rule 11:
+Do not delete old cloud data until a verified archive/backup process exists.
+
+
+Rule 12:
+Keep product catalog caching and stock freshness as separate concerns.
+
+
+============================================================
+49. MASTER ARCHITECTURE DIAGRAM
+============================================================
+
+                         +----------------------+
+                         |      FLUTTER APP     |
+                         +----------+-----------+
+                                    |
+                 +------------------+------------------+
+                 |                  |                  |
+                 v                  v                  v
+             Screens            Navigation        UI Widgets
+                 |
+                 v
+          +--------------+
+          |   Provider   |
+          | State Layer  |
+          +------+-------+
+                 |
+                 v
+       +---------------------+
+       | Service / Repository|
+       +----------+----------+
+                  |
+         +--------+--------+
+         |                 |
+         v                 v
+      HIVE              FIREBASE
+         |                 |
+         |       +---------+----------+
+         |       |         |          |
+         |       v         v          v
+         |   Auth       Firestore   Storage
+         |                 |
+         |        +--------+--------+
+         |        |        |        |
+         |        v        v        v
+         |      Users   Products   Orders
+         |                 |
+         +--------+--------+
+                  |
+                  v
+              Data Models
+                  |
+                  v
+               Provider
+                  |
+                  v
+                 UI
+
+
+============================================================
+50. ONE-SENTENCE ARCHITECTURE SUMMARY
+============================================================
+
+The Charity App is a Flutter/Firebase mobile application where Firebase
+Authentication manages identity, Cloud Firestore stores shared application
+data such as users, products and orders, Provider manages runtime state,
+Hive/local storage provides persistent caching and offline-oriented access,
+media services handle images/files, and the UI consumes structured models
+through a service/data layer rather than directly depending on raw Firestore
+documents.
+
+
+============================================================
+51. SHORT EXPLANATION FOR AN AI CODING AGENT
+============================================================
+
+When modifying this project, understand it as follows:
+
+- Flutter/Dart is the client application.
+- Firebase Authentication handles identity.
+- Firestore is the main cloud database.
+- Firebase Storage is used for files/media where configured.
+- Provider manages application state.
+- Hive is the local persistent cache/storage layer.
+- SharedPreferences is for small local key/value settings.
+- Products are relatively stable catalog data and should be cached efficiently.
+- Orders are dynamic data and should be queried carefully.
+- Product images should use caching.
+- Product catalog and stock should not automatically use the same freshness
+  strategy.
+- UI should not repeatedly access Firestore directly.
+- Use models for structured product/order/user data.
+- Use services/repositories for database operations.
+- Use providers to expose data to the UI.
+- Use Firestore security rules for authorization.
+- Do not assume planned catalog-versioning, product-change-ID or archival
+  features are already implemented without verifying source code.
+- Avoid unnecessary Firestore reads and writes.
+- Preserve order-time product information so historical orders remain correct.
+- Prefer loading only the data needed for the current screen.
+- Use local cache when appropriate to improve startup/offline behavior.
+
+
+============================================================
+52. FINAL MENTAL MODEL
+============================================================
+
+Think of the application as five major systems:
+
+1. IDENTITY
+   Firebase Authentication
+   |
+   +-- Who is the user?
+   +-- What is the user's UID?
+   +-- Is the user logged in?
+
+
+2. CLOUD DATA
+   Cloud Firestore
+   |
+   +-- Users
+   +-- Products
+   +-- Orders
+   +-- Application configuration
+
+
+3. LOCAL DATA
+   Hive / SharedPreferences / image cache
+   |
+   +-- Cached products
+   +-- Local flags/settings
+   +-- Offline-oriented data
+   +-- Cached images
+
+
+4. APPLICATION STATE
+   Provider
+   |
+   +-- Holds current data
+   +-- Notifies widgets
+   +-- Coordinates UI state
+
+
+5. PRESENTATION
+   Flutter UI
+   |
+   +-- Home
+   +-- Product screens
+   +-- Cart
+   +-- Checkout
+   +-- Orders
+   +-- Profile
+   +-- Admin functionality
+   +-- Reports/PDFs
+   +-- Other application screens
+
+
+Overall:
+
+                    USER
+                     |
+                     v
+                FLUTTER UI
+                     |
+                     v
+                  PROVIDER
+                     |
+                     v
+             SERVICE / DATA LAYER
+                /            \
+               /              \
+              v                v
+            HIVE            FIREBASE
+              |           /     |      \
+              |          /      |       \
+              |         v       v        v
+              |       AUTH  FIRESTORE  STORAGE
+              |               |
+              |        +------+------+ 
+              |        |      |      |
+              |        v      v      v
+              |      USERS PRODUCTS ORDERS
+              |               |
+              +---------------+
+                      |
+                      v
+                    MODELS
+                      |
+                      v
+                   PROVIDER
+                      |
+                      v
+                     UI
+
+
+END OF CHARITY APP ARCHITECTURE DOCUMENT

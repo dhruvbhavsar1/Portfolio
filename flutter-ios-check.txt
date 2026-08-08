@@ -1,0 +1,2153 @@
+FLUTTER IOS CHECK Complete Architecture, Working, Technology, Current
+Implementation, Data Flow, Validation Engine, CLI Design, Development
+History, Limitations, and Roadmap
+
+Document purpose
+
+This document explains the Flutter iOS Check project in detail: what the
+tool is, why it exists, what technologies are used, how the code is
+organized conceptually, how a scan moves through the system, what has
+already been implemented, what is planned, what the tool does NOT do,
+and how the architecture can be extended.
+
+PROJECT IDENTITY
+
+Name: Flutter iOS Check
+
+Type: Local command-line static analysis tool
+
+Primary language: Python
+
+Target: Flutter projects that contain an iOS platform directory
+
+Main problem: Flutter development is cross-platform, but the iOS side
+still has native configuration requirements. Many iOS problems are
+discovered late, often when the developer reaches Xcode, a physical
+iPhone, TestFlight, cloud macOS runners, or App Store preparation.
+
+Core idea: Inspect the Flutter project’s files locally and report likely
+iOS-readiness problems before the project reaches the expensive/slow iOS
+build stage.
+
+Important design principle: The tool is an ANALYZER, not a builder.
+
+It reads project files, parses configuration, applies validation rules,
+and produces findings. It does not need to launch Xcode and it does not
+need to modify the user’s project.
+
+The project is especially useful on Windows/Linux because it can catch
+many configuration problems without requiring a Mac for the analysis
+stage.
+
+WHAT THE TOOL DOES
+
+At a high level:
+
+    Flutter project
+          |
+          v
+    Project discovery
+          |
+          v
+    Read project configuration
+          |
+          +--> pubspec.yaml
+          |
+          +--> ios/Podfile
+          |
+          +--> ios/Runner/Info.plist
+          |
+          +--> other iOS/plugin/Firebase configuration
+          |
+          v
+    Parse into structured information
+          |
+          v
+    Rule engine
+          |
+          v
+    Findings
+          |
+          v
+    CLI report
+          |
+          v
+    Developer fixes the project
+
+The tool is therefore a pipeline:
+
+    INPUT -> DISCOVERY -> PARSING -> MODEL -> RULES -> FINDINGS -> OUTPUT
+
+WHAT THE TOOL DOES NOT DO
+
+The analyzer is intentionally static.
+
+It does not: - run Xcode - replace Xcode - compile an iOS application -
+run an iOS simulator - run an iPhone - sign an application - access
+Apple’s developer account - submit to App Store Connect - contact Apple
+services - contact Firebase services just to perform the scan -
+guarantee that an application will build successfully - guarantee App
+Store approval - modify the target Flutter project - automatically
+repair files unless a future separate fixer feature is added
+
+This distinction is important:
+
+    "iOS readiness analysis" != "iOS build"
+
+The tool can identify configuration risks, but only a real iOS
+environment can prove that the project actually compiles, links, signs,
+launches, and behaves correctly.
+
+TECHNOLOGY STACK
+
+Current project technology:
+
+1.  Python Used for:
+
+    -   CLI implementation
+    -   filesystem inspection
+    -   parsing
+    -   validation
+    -   finding generation
+    -   testable rule logic
+
+2.  Python standard-library style components The architecture is
+    intended to remain lightweight. Typical responsibilities include:
+
+    -   pathlib/os for filesystem operations
+    -   plist/config parsing
+    -   regular expressions where appropriate
+    -   dataclasses/models for structured information
+    -   argparse or a CLI framework depending on the current command
+        implementation
+    -   unittest/pytest-style tests depending on the repository setup
+
+3.  YAML configuration pubspec.yaml is an important input because
+    Flutter dependencies reveal which plugins may require iOS native
+    configuration.
+
+4.  Apple plist configuration ios/Runner/Info.plist is inspected for iOS
+    application metadata and settings.
+
+5.  CocoaPods configuration ios/Podfile is inspected for iOS deployment
+    target and related configuration.
+
+6.  Git/GitHub The project is open source and maintained as a Git
+    repository.
+
+Repository: https://github.com/dhruvbhavsar1/flutter-ios-check
+
+ARCHITECTURE
+
+The architecture is modular static analysis.
+
+Conceptual layers:
+
+    CLI Layer
+       |
+       v
+    Scanner / Discovery Layer
+       |
+       v
+    Parser Layer
+       |
+       v
+    Project Model
+       |
+       v
+    Rule / Validator Engine
+       |
+       v
+    Finding Model
+       |
+       v
+    Output / Reporter Layer
+
+Each layer has a different job.
+
+1. CLI LAYER
+
+The CLI is the entry point.
+
+Responsibilities: - accept commands - accept a project path - accept
+optional filters/options - start a scan - pass configuration into the
+scanner - display results - return a useful process exit status
+
+Conceptual command:
+
+    python main.py scan <project-path>
+
+A verbose mode can provide more internal information, for example:
+
+    python main.py scan <project-path> --verbose
+
+The exact command syntax should always be taken from the current
+repository README/help output because CLI syntax can evolve.
+
+Why CLI: - easy to automate - works in terminals - works in CI/CD - easy
+to use locally - does not require a GUI - easy to integrate into GitHub
+Actions
+
+2. PROJECT DISCOVERY / SCANNER LAYER
+
+The scanner identifies the Flutter project and its important files.
+
+Typical discovery checks:
+
+    project/
+    ├── pubspec.yaml
+    ├── lib/
+    ├── android/
+    ├── ios/
+    │   ├── Podfile
+    │   └── Runner/
+    │       └── Info.plist
+    └── ...
+
+The scanner should not assume every optional file exists.
+
+For example:
+
+    ios/Podfile
+        exists -> parse it
+        missing -> produce a finding or skip according to rule policy
+
+    ios/Runner/Info.plist
+        exists -> parse it
+        missing -> produce a finding
+
+The scanner’s job is discovery, not decision-making.
+
+This separation is important because: scanner = “what files/data are
+available?” validator = “is that data acceptable?”
+
+3. PUBSPEC ANALYSIS
+
+pubspec.yaml contains Flutter/Dart project dependencies.
+
+The analyzer reads dependencies because plugins can imply native iOS
+requirements.
+
+Examples of dependency categories that may matter: - camera - location -
+notifications - microphone/audio - contacts - photos - Firebase -
+URL/deep-link plugins - other plugins with native iOS behavior
+
+The dependency list becomes input to later validation.
+
+Important: A package existing in pubspec.yaml does not automatically
+mean a specific permission is definitely required in every possible code
+path. Plugin-to- permission validation is therefore a rule-based
+heuristic, not a proof of runtime behavior.
+
+4. IOS CONFIGURATION PARSING
+
+Phase 4 moved the project beyond simple file-existence checks.
+
+The analyzer began extracting actual configuration values.
+
+Currently important extracted information includes:
+
+    ios_deployment_target
+    display_name
+    bundle_identifier
+    permissions
+    url_schemes
+    ats_settings
+
+These values are stored in the central project information model so
+multiple rules can use the same parsed data.
+
+5. PODFILE PARSER
+
+The Podfile is an important native iOS configuration file.
+
+The analyzer reads it to identify the iOS deployment target.
+
+Example concept:
+
+    platform :ios, '13.0'
+
+The parser extracts:
+
+    ios_deployment_target = 13.0
+
+The value can then be passed to a validator.
+
+Why this matters: Flutter/Dart code can look completely correct while
+the native iOS deployment target is incompatible with a plugin or the
+intended support range.
+
+Important parser principle: Do not merely search for the text “13.0”
+anywhere in the file. The parser should try to associate the value with
+the actual iOS platform/deployment declaration.
+
+6. INFO.PLIST PARSER
+
+Info.plist is an Apple property-list configuration file.
+
+The analyzer extracts useful application configuration such as:
+
+-   display name
+-   bundle-related information where represented
+-   permission usage descriptions
+-   URL schemes
+-   App Transport Security settings
+
+Permission usage descriptions are especially important.
+
+Examples include usage descriptions conceptually associated with: -
+camera - microphone - photos - location - contacts - Bluetooth
+
+The important iOS rule is that an app requesting certain protected
+resources must provide appropriate usage-description keys.
+
+The analyzer can therefore detect situations such as:
+
+    plugin appears to need camera
+            +
+    expected camera usage description is absent
+            =
+    warning/error finding
+
+7. BUNDLE IDENTIFIER
+
+The tool checks the iOS bundle identifier.
+
+Conceptually:
+
+    com.example.myapp
+
+A validator can detect: - missing identifier - malformed identifier -
+placeholder/default values - suspicious configuration
+
+The purpose is not to prove Apple registration. The tool cannot know
+whether the identifier is registered correctly with the developer
+account.
+
+It can only inspect the local configuration.
+
+8. DISPLAY NAME
+
+The analyzer extracts the application display name.
+
+Potential issues: - missing display name - empty value - suspicious
+placeholder - mismatch with expected project configuration where a rule
+is defined
+
+Again, this is local static validation.
+
+9. URL SCHEMES
+
+Info.plist can contain URL schemes.
+
+URL schemes can be required for: - deep linking - OAuth flows -
+third-party integrations - payment/application handoffs - callback
+mechanisms
+
+The analyzer extracts configured schemes so future/current rules can
+verify expected configuration.
+
+Important limitation: Finding a URL scheme in Info.plist does not prove
+that the external service will successfully redirect at runtime.
+
+10. ATS / APP TRANSPORT SECURITY
+
+Apple’s App Transport Security configuration affects HTTP/HTTPS
+networking.
+
+The analyzer extracts ATS-related settings from Info.plist.
+
+The validator can identify risky or unusual configurations such as broad
+exceptions.
+
+The purpose is to surface configuration that may cause iOS networking
+issues or security concerns.
+
+A warning about ATS is not necessarily saying: “your application is
+broken.”
+
+It means: “this configuration deserves review.”
+
+11. CENTRAL PROJECT INFORMATION MODEL
+
+One of the key architectural improvements is using a structured model
+instead of letting every rule independently read files.
+
+Conceptually:
+
+    ProjectInfo
+      |
+      +-- project_path
+      +-- pubspec/dependencies
+      +-- ios_deployment_target
+      +-- display_name
+      +-- bundle_identifier
+      +-- permissions
+      +-- url_schemes
+      +-- ats_settings
+      +-- Firebase information
+      +-- plugin information
+      +-- other future iOS metadata
+
+This creates a single analysis context.
+
+Without a central model:
+
+    Rule A -> reads Info.plist
+    Rule B -> reads Info.plist
+    Rule C -> reads Info.plist
+    Rule D -> reads Podfile
+
+With the model:
+
+    Parser -> ProjectInfo
+                 |
+                 +-> Rule A
+                 +-> Rule B
+                 +-> Rule C
+                 +-> Rule D
+
+Benefits: - less duplicated file reading - easier testing - easier rule
+development - cleaner architecture - easier future output formats -
+rules remain focused on validation rather than parsing
+
+12. RULE ENGINE
+
+The rule engine is the main intelligence of the analyzer.
+
+A rule receives structured project information and decides whether a
+condition is satisfied.
+
+Conceptually:
+
+    Rule
+      |
+      +-- condition
+      +-- severity
+      +-- message
+      +-- recommendation
+      +-- optional metadata
+
+Examples:
+
+    DeploymentTargetRule
+    BundleIdentifierRule
+    DisplayNameRule
+    ATSRule
+    PermissionRule
+    FirebaseRule
+    PluginPermissionRule
+
+The important architecture is:
+
+    PARSE ONCE
+       ->
+    RUN MANY RULES
+
+This is what makes the project extensible.
+
+13. FINDING MODEL
+
+A rule should not simply print text.
+
+Instead it should generate a structured finding.
+
+Conceptual finding:
+
+    severity:
+        ERROR / WARNING / INFO
+
+    code:
+        stable identifier for the rule
+
+    title:
+        short problem description
+
+    message:
+        explanation
+
+    recommendation:
+        how the developer can investigate/fix it
+
+    file:
+        related file, when known
+
+    context:
+        optional extracted value or extra information
+
+Example concept:
+
+    Severity: WARNING
+    Code: IOS_ATS_BROAD_EXCEPTION
+    File: ios/Runner/Info.plist
+    Message: App Transport Security contains a broad exception.
+    Recommendation: Review whether the exception is required and prefer HTTPS.
+
+Structured findings are much better than plain printed strings because
+future output formats can consume the same data.
+
+14. SEVERITY
+
+The analyzer can categorize findings.
+
+Typical model:
+
+    ERROR
+        likely configuration problem that should be fixed
+
+    WARNING
+        suspicious/risky condition that requires review
+
+    INFO
+        useful information or non-blocking observation
+
+Severity should be based on confidence and impact.
+
+A static analyzer should avoid calling uncertain heuristics “errors”
+unless the rule is sufficiently deterministic.
+
+15. VALIDATION RULES IMPLEMENTED / DEVELOPED
+
+The project has progressed through multiple phases.
+
+Phase 1 - Project Validation
+
+Initial goal: Confirm that the supplied path is a Flutter project and
+that important project structure exists.
+
+Examples: - valid project path - pubspec.yaml exists - iOS directory
+exists
+
+Phase 2 - Project Scanner
+
+The scanner was introduced to inspect project structure and
+dependencies.
+
+Responsibilities: - locate pubspec.yaml - inspect dependencies -
+identify iOS project - prepare data for analysis
+
+Phase 3 - Rule Engine and Findings
+
+The project moved from “checking files” to “checking conditions.”
+
+A modular rule/finding architecture was introduced.
+
+This is a major architectural step because adding a new check does not
+require rewriting the entire scanner.
+
+Phase 4 - iOS Configuration Parser
+
+The analyzer began reading real iOS configuration.
+
+Important extracted values: - deployment target from Podfile - display
+name from Info.plist - bundle identifier information - permission
+declarations - URL schemes - ATS settings
+
+This is the transition from structural inspection to configuration
+analysis.
+
+Phase 5 - Validators
+
+Validation rules were added for extracted configuration.
+
+Important validation areas: - deployment target - bundle identifier -
+display name - ATS configuration
+
+Phase 6 - Plugin <-> Permission Validation
+
+The next major intelligence layer is relating Flutter dependencies to
+iOS permission declarations.
+
+Concept:
+
+    pubspec dependency
+          |
+          v
+    plugin capability/requirement mapping
+          |
+          v
+    expected iOS permission key
+          |
+          v
+    Info.plist
+          |
+          v
+    compare
+          |
+       finding
+
+Example concept:
+
+    camera-related plugin
+            |
+            v
+    camera usage description expected
+            |
+            v
+    Info.plist
+            |
+            +--> present -> PASS
+            |
+            +--> missing -> WARNING/ERROR
+
+This should remain a mapping/heuristic system rather than pretending the
+tool can perfectly understand every plugin’s source code.
+
+Phase 7 - Firebase Validation
+
+Firebase validation is intended to identify Firebase-related iOS
+configuration problems.
+
+Important distinction: Firebase is optional.
+
+If a Flutter project does not use Firebase, Firebase validation should
+not produce irrelevant Firebase errors.
+
+The validator should first detect Firebase-related
+dependencies/configuration.
+
+Concept:
+
+    Firebase plugin present?
+          |
+       no +----> skip Firebase-specific checks
+          |
+         yes
+          |
+          v
+    inspect expected Firebase iOS configuration
+          |
+          v
+    generate relevant findings
+
+This is an important design rule: Optional technology must produce
+optional validation.
+
+16. FIREBASE VALIDATION DESIGN
+
+Potential Firebase-related inputs can include: - Firebase Flutter
+dependencies - iOS Firebase configuration files - configuration
+references - required integration artifacts
+
+The analyzer must be careful with false positives.
+
+For example: A project can contain Firebase-related packages but have a
+configuration strategy that differs between flavors/environments.
+
+Therefore, the validator should report: - definite missing requirements
+as high confidence - suspicious configuration as warnings -
+environment-dependent conditions as informational findings
+
+The tool should not claim: “Firebase is broken” unless the local
+evidence is strong enough.
+
+17. PLUGIN-PERMISSION VALIDATION DESIGN
+
+This feature uses a mapping layer.
+
+Conceptual mapping:
+
+    plugin family
+        ->
+    iOS capability
+        ->
+    Info.plist usage-description key
+
+Examples conceptually:
+
+    camera plugin
+        -> camera
+        -> NSCameraUsageDescription
+
+    microphone/audio plugin
+        -> microphone
+        -> NSMicrophoneUsageDescription
+
+    location plugin
+        -> location
+        -> appropriate location usage-description keys
+
+The mapping should be data-driven where possible.
+
+Instead of hardcoding dozens of if-statements:
+
+    if package == "x":
+        ...
+    elif package == "y":
+        ...
+
+prefer a maintainable mapping structure.
+
+This makes it easier to add support for more plugins.
+
+18. COMMAND FLOW
+
+A complete scan can conceptually work like this:
+
+STEP 1 User executes:
+
+    python main.py scan ./my_flutter_app
+
+STEP 2 CLI validates arguments.
+
+STEP 3 Scanner receives:
+
+    ./my_flutter_app
+
+STEP 4 Scanner verifies project structure.
+
+STEP 5 Parser reads:
+
+    pubspec.yaml
+    ios/Podfile
+    ios/Runner/Info.plist
+    other supported configuration
+
+STEP 6 Parsers populate:
+
+    ProjectInfo
+
+STEP 7 Rule engine loads applicable validators.
+
+STEP 8 Rules inspect ProjectInfo.
+
+STEP 9 Rules create Findings.
+
+STEP 10 Reporter prints findings.
+
+STEP 11 CLI exits with an appropriate status.
+
+This separation allows the same analysis engine to later power: -
+terminal output - JSON output - GitHub Actions annotations - CI
+summaries - HTML reports - IDE integrations
+
+19. EXAMPLE INTERNAL DATA FLOW
+
+Input:
+
+    pubspec.yaml
+        dependencies:
+            firebase_core
+            image_picker
+            url_launcher
+
+    ios/Podfile
+        platform :ios, '13.0'
+
+    ios/Runner/Info.plist
+        CFBundleDisplayName
+        camera usage description
+        ATS settings
+        URL schemes
+
+Parser output:
+
+    ProjectInfo(
+        dependencies = [...],
+        ios_deployment_target = "13.0",
+        display_name = "...",
+        bundle_identifier = "...",
+        permissions = [...],
+        url_schemes = [...],
+        ats_settings = {...}
+    )
+
+Rule engine:
+
+    DeploymentTargetRule
+    DisplayNameRule
+    BundleIdentifierRule
+    ATSRule
+    PluginPermissionRule
+    FirebaseRule
+
+Findings:
+
+    [
+        Finding(...),
+        Finding(...),
+        ...
+    ]
+
+Reporter:
+
+    terminal output
+        |
+        +-- summary
+        +-- errors
+        +-- warnings
+        +-- info
+        +-- recommendations
+
+20. WHY PARSERS AND RULES MUST STAY SEPARATE
+
+Bad architecture:
+
+    scan()
+       |
+       +-- read Podfile
+       +-- parse Podfile
+       +-- decide target is bad
+       +-- read Info.plist
+       +-- decide ATS is bad
+       +-- read pubspec
+       +-- decide permissions
+       +-- print everything
+
+This becomes difficult to maintain.
+
+Better architecture:
+
+    scanner
+       |
+       v
+    parsers
+       |
+       v
+    ProjectInfo
+       |
+       v
+    validators
+       |
+       v
+    findings
+       |
+       v
+    reporter
+
+This makes every stage independently testable.
+
+21. TESTING STRATEGY
+
+A static analyzer must have strong tests because rules can produce false
+positives/negatives.
+
+Test categories:
+
+A. Parser tests
+
+Given known input:
+
+    Podfile text
+
+Expected:
+
+    deployment target = "13.0"
+
+B. Info.plist parser tests
+
+Given a plist with:
+
+    NSCameraUsageDescription
+
+Expected: camera permission detected
+
+C. Rule tests
+
+Given a ProjectInfo with:
+
+    ios_deployment_target = "13.0"
+
+and a rule threshold that accepts 13.0:
+
+    no error
+
+Given an unsupported/too-low target:
+
+    expected finding
+
+D. Missing-file tests
+
+Project missing: - pubspec.yaml - iOS directory - Podfile - Info.plist
+
+The analyzer should fail gracefully and produce understandable findings.
+
+E. Optional-feature tests
+
+Project without Firebase:
+
+    Firebase-specific rules should not generate irrelevant failures.
+
+Project with Firebase:
+
+    Firebase-specific rules become applicable.
+
+F. False-positive tests
+
+A plugin that does not actually require a permission in the relevant
+context should not automatically be treated as a guaranteed runtime
+requirement.
+
+22. CI/CD POTENTIAL
+
+One of the strongest future uses of this tool is CI/CD.
+
+The analyzer can run before an expensive iOS build.
+
+Example workflow:
+
+    Developer pushes code
+            |
+            v
+       GitHub Actions
+            |
+            v
+       install Python
+            |
+            v
+       install Flutter iOS Check
+            |
+            v
+       run scan
+            |
+       +----+----+
+       |         |
+     clean     findings
+       |         |
+       v         v
+    continue   fail/warn
+
+This is useful because CI can catch static configuration problems before
+developers wait for cloud macOS/iOS build stages.
+
+23. WHY THIS TOOL IS USEFUL WITHOUT A MAC
+
+A Mac is required for actual iOS building/testing/signing.
+
+But not every iOS problem requires a Mac to identify.
+
+Many problems are visible directly in project files:
+
+    Podfile
+    Info.plist
+    pubspec.yaml
+    Firebase configuration
+    plugin configuration
+
+Therefore:
+
+    Windows/Linux
+        |
+        v
+    static iOS readiness analysis
+        |
+        v
+    fix obvious issues
+        |
+        v
+    use Mac/cloud macOS only when necessary
+        |
+        v
+    build/test/sign
+
+This can reduce wasted iOS build attempts and cloud CI minutes.
+
+24. COST AND PERFORMANCE IDEA
+
+The analyzer is designed to be local and lightweight.
+
+It should: - read files directly - avoid unnecessary network requests -
+avoid building the project - avoid downloading large dependencies -
+avoid contacting Apple/Firebase for normal static checks
+
+This makes a scan much cheaper than a full build.
+
+The cost advantage is especially relevant for cloud macOS CI, where
+build minutes can be expensive.
+
+25. SECURITY / PRIVACY
+
+The analyzer is intended to inspect local files.
+
+Because the normal scan is static: - no project upload is required - no
+Apple account is required - no Firebase login is required - no source
+code needs to be sent to a remote analyzer
+
+This is a strong privacy characteristic.
+
+However, CI logs must still be designed carefully so that sensitive
+values from configuration files are not accidentally printed.
+
+The reporter should avoid dumping entire secrets/configuration files.
+
+26. READ-ONLY DESIGN
+
+A major safety principle is:
+
+    ANALYZE, DON'T MODIFY.
+
+The analyzer should not automatically edit: - Podfile - Info.plist -
+pubspec.yaml - Firebase configuration - source code
+
+unless a future explicitly opt-in “fix” command is created.
+
+Read-only behavior is safer because: - no accidental project
+corruption - no unexpected dependency changes - easier trust - safer CI
+usage - easier debugging
+
+27. CURRENT PROJECT MATURITY
+
+The project has evolved from a simple existence checker into a modular
+static analysis system.
+
+Evolution:
+
+    Stage 1
+        "Does the iOS folder exist?"
+
+    Stage 2
+        "What dependencies does this Flutter project use?"
+
+    Stage 3
+        "What rules should be checked?"
+
+    Stage 4
+        "What does the actual iOS configuration contain?"
+
+    Stage 5
+        "Is that configuration valid?"
+
+    Stage 6
+        "Do Flutter plugins appear to match iOS permissions?"
+
+    Stage 7
+        "Does Firebase-specific configuration make sense when Firebase is used?"
+
+This is the correct general direction for a static analyzer.
+
+28. WHAT IS ALREADY DONE
+
+Based on the current project development history, the major completed
+work includes:
+
+-   project validation
+-   Flutter project scanning
+-   pubspec/dependency analysis
+-   modular rule/finding architecture
+-   iOS configuration parsing
+-   Podfile deployment-target extraction
+-   Info.plist parsing
+-   display-name extraction
+-   bundle identifier extraction/validation
+-   permission extraction/validation groundwork
+-   URL scheme extraction
+-   ATS configuration extraction
+-   deployment-target validation
+-   display-name validation
+-   bundle-identifier validation
+-   ATS validation
+-   documentation/README/roadmap work
+-   open-source GitHub repository
+-   automated-test-oriented architecture
+
+Plugin-permission and Firebase validation are part of the later
+expansion of the analyzer and should be considered implemented only to
+the extent that the current repository actually contains their
+corresponding code/tests. The architecture is prepared for them and they
+should remain optional when the project does not use the relevant
+technology.
+
+29. CURRENT LIMITATIONS
+
+The analyzer cannot know everything.
+
+Examples:
+
+A. Build-system behavior
+
+A Podfile can look correct while CocoaPods resolution still fails.
+
+B. Xcode project state
+
+Some problems exist in .pbxproj/Xcode build settings and are not
+equivalent to simple Info.plist validation.
+
+C. Native plugin implementation
+
+A plugin may change its iOS requirements between versions.
+
+D. Runtime behavior
+
+A static analyzer cannot prove runtime permission flow.
+
+E. Code paths
+
+A dependency may exist but a particular capability may never be used.
+
+F. Signing
+
+Certificates/profiles/team configuration require Apple tooling/account
+context.
+
+G. App Store review
+
+No static analyzer can guarantee review approval.
+
+H. iOS SDK compatibility
+
+Some compatibility questions depend on the exact Xcode/SDK/toolchain
+versions.
+
+Therefore the tool should communicate findings with appropriate
+confidence and avoid pretending to be an Apple build validator.
+
+30. FALSE POSITIVE CONTROL
+
+This is one of the most important engineering concerns.
+
+A good analyzer is not the tool that reports the most warnings.
+
+A good analyzer is the tool that reports useful warnings.
+
+For every rule, ask:
+
+    What evidence do we have?
+
+    How deterministic is this?
+
+    Could this be valid in another project setup?
+
+    Should this be ERROR, WARNING, or INFO?
+
+Example:
+
+    "camera plugin exists"
+
+does not necessarily prove: “camera permission is definitely missing”
+
+A better message is:
+
+    "The project uses a camera-related plugin, but no corresponding
+     NSCameraUsageDescription was detected in Info.plist."
+
+That statement is directly supported by local evidence.
+
+31. EXTENSIBILITY
+
+The architecture should make new checks cheap to add.
+
+Future rules can cover areas such as:
+
+-   minimum iOS version compatibility
+-   Swift version indicators
+-   Xcode project settings
+-   build configurations
+-   signing-related static configuration
+-   capabilities/entitlements
+-   background modes
+-   notification configuration
+-   associated domains
+-   universal links
+-   privacy manifest files
+-   required reason APIs
+-   app tracking configuration
+-   localization configuration
+-   orientation settings
+-   device family settings
+-   deployment target consistency
+-   Podfile/post_install configuration
+-   Firebase plist consistency
+-   flavor/scheme configuration
+
+Each new feature should preferably follow:
+
+    parser
+       ->
+    ProjectInfo field
+       ->
+    rule
+       ->
+    finding
+       ->
+    test
+
+32. FUTURE ARCHITECTURE
+
+A mature version can look like:
+
+    CLI
+     |
+     +------------------------------+
+     |                              |
+     v                              v
+
+Configuration Output format | | v | Scanner | | | v | Parsers | | | v |
+ProjectInfo | | | v | Rule Registry ———————+ | v Findings | +–> terminal
+reporter +–> JSON reporter +–> CI reporter +–> GitHub annotations +–>
+HTML report
+
+33. RULE REGISTRY CONCEPT
+
+Instead of hardcoding validators in the CLI:
+
+    rules = [
+        DeploymentTargetRule(),
+        BundleIdentifierRule(),
+        DisplayNameRule(),
+        ATSRule(),
+        PluginPermissionRule(),
+        FirebaseRule()
+    ]
+
+The engine can execute each rule against the same ProjectInfo.
+
+This makes enabling/disabling rules easier.
+
+It also makes filters possible.
+
+Example concept:
+
+    --only permissions
+    --only firebase
+    --skip ats
+    --severity warning
+
+The exact options depend on the implementation.
+
+34. PROJECT FILTERING
+
+The CLI can support filtering so developers can focus on specific
+categories.
+
+Conceptual categories:
+
+    ios
+    permissions
+    plugins
+    firebase
+    configuration
+    security
+
+Example conceptual usage:
+
+    scan project --category permissions
+
+This is useful in large CI pipelines.
+
+35. OUTPUT DESIGN
+
+A useful report should answer four questions:
+
+    1. What is wrong?
+    2. Where is it wrong?
+    3. Why does it matter?
+    4. What should I check/fix?
+
+Bad output:
+
+    ERROR
+
+Good output:
+
+    ERROR [IOS_DEPLOYMENT_TARGET]
+    ios/Podfile
+    Deployment target is below the configured supported minimum.
+    Review the Podfile platform declaration and plugin requirements.
+
+The exact wording should be consistent across rules.
+
+36. EXIT CODES
+
+CLI tools become much more useful in automation when they return
+meaningful exit codes.
+
+Concept:
+
+    0 = scan completed without blocking errors
+    non-zero = blocking findings or execution failure
+
+Warnings may or may not fail CI depending on the chosen policy.
+
+Future configuration could support:
+
+    fail on errors
+    fail on warnings
+    report only
+
+This allows developers to introduce the tool gradually.
+
+37. JSON OUTPUT
+
+A future structured output could look conceptually like:
+
+    {
+      "project": "my_app",
+      "summary": {
+        "errors": 1,
+        "warnings": 3,
+        "info": 2
+      },
+      "findings": [
+        {
+          "code": "IOS_DEPLOYMENT_TARGET",
+          "severity": "ERROR",
+          "file": "ios/Podfile",
+          "message": "...",
+          "recommendation": "..."
+        }
+      ]
+    }
+
+JSON is useful for: - CI - GitHub Actions - dashboards - IDE plugins -
+custom scripts
+
+38. GITHUB ACTIONS INTEGRATION
+
+A strong future workflow is:
+
+    push
+      |
+      v
+    GitHub Actions
+      |
+      +--> checkout
+      |
+      +--> install Python/tool
+      |
+      +--> run flutter-ios-check
+      |
+      +--> produce report
+      |
+      +--> optionally fail
+      |
+      v
+    developer receives result
+
+This does not require Docker.
+
+Docker can be useful for reproducibility, but it is not the core
+requirement for this tool. The analyzer itself is a Python CLI and can
+run directly in CI.
+
+39. WHY GITHUB ACTIONS FITS THIS PROJECT
+
+The tool’s purpose is preflight validation.
+
+CI/CD is exactly where preflight validation is valuable.
+
+Ideal order:
+
+    static checks
+         |
+         v
+    dependency/build checks
+         |
+         v
+    iOS build
+         |
+         v
+    tests
+         |
+         v
+    TestFlight/App Store workflow
+
+If static checks fail, there is no reason to immediately spend expensive
+build time.
+
+40. DEVELOPMENT PHILOSOPHY
+
+The project should remain:
+
+-   modular
+-   deterministic
+-   local-first
+-   read-only
+-   testable
+-   explainable
+-   low-cost
+-   CI-friendly
+-   extensible
+-   conservative about false positives
+
+The analyzer should prefer evidence over assumptions.
+
+41. WHAT MAKES THIS DIFFERENT FROM A NORMAL FLUTTER CHECK
+
+A generic Flutter analyzer focuses primarily on Dart/Flutter source
+code.
+
+Flutter iOS Check focuses on the boundary between:
+
+    Flutter project
+          +
+    native iOS configuration
+
+That boundary is where many platform-specific problems appear.
+
+The tool therefore concentrates on:
+
+    pubspec
+       +
+    iOS configuration
+       +
+    native requirements
+       +
+    validation rules
+
+42. RELATIONSHIP WITH FLUTTER
+
+Flutter generates and maintains platform folders, but the iOS project is
+still a real native project.
+
+The analyzer treats:
+
+    Dart/Flutter project
+
+and:
+
+    iOS native configuration
+
+as connected but separate layers.
+
+This is why pubspec dependency information is useful to understand iOS
+configuration requirements.
+
+43. EXAMPLE SCENARIO
+
+Suppose a developer creates:
+
+    flutter create my_app
+
+Then adds a plugin requiring camera access.
+
+The developer may write perfectly valid Dart code.
+
+However, iOS may still need:
+
+    NSCameraUsageDescription
+
+The analyzer can inspect:
+
+    pubspec.yaml
+          |
+          v
+    detect camera-related plugin
+          |
+          v
+    inspect Info.plist
+          |
+          v
+    usage description missing
+          |
+          v
+    finding
+
+The developer can fix the configuration before reaching the iOS build
+stage.
+
+44. SECOND EXAMPLE: DEPLOYMENT TARGET
+
+Suppose:
+
+    Podfile:
+        platform :ios, '12.0'
+
+and a project’s chosen plugin ecosystem requires a higher deployment
+target.
+
+The analyzer can:
+
+    parse 12.0
+        |
+        v
+    compare against rule threshold
+        |
+        v
+    report finding
+
+Again, it does not build the application. It catches a configuration
+mismatch.
+
+45. THIRD EXAMPLE: FIREBASE OPTIONALITY
+
+Project A:
+
+    dependencies:
+        firebase_core: ...
+
+Project B:
+
+    dependencies:
+        no Firebase packages
+
+The analyzer must behave differently.
+
+Project A: Firebase rules apply.
+
+Project B: Firebase rules should be skipped.
+
+This avoids noisy reports and is an important principle for extensible
+tooling.
+
+46. FOURTH EXAMPLE: ATS
+
+If Info.plist contains a broad ATS exception, the analyzer can report:
+
+    WARNING
+    Review App Transport Security exception.
+
+It should not automatically claim:
+
+    ERROR - App is insecure.
+
+Why? Because there can be legitimate technical reasons for a specific
+exception, and static analysis does not know the application’s complete
+network design.
+
+47. ANALYZER VS LINTER VS BUILD TOOL
+
+Flutter iOS Check is closest to a static analyzer/preflight validator.
+
+Linter: usually checks source/style patterns.
+
+Build tool: compiles the application.
+
+Static analyzer: inspects code/configuration and detects conditions
+without executing the complete application.
+
+Flutter iOS Check focuses on configuration-oriented static analysis.
+
+48. DATA PRIVACY MODEL
+
+Normal operation:
+
+    local Flutter project
+          |
+          v
+    local Python process
+          |
+          v
+    local report
+
+No server is necessary.
+
+This is intentionally different from a cloud-based code scanner.
+
+49. PERFORMANCE MODEL
+
+The analyzer should be fast because it is primarily reading small
+configuration files rather than compiling an application.
+
+The target workflow is:
+
+    edit
+      ->
+    save
+      ->
+    scan
+      ->
+    immediate feedback
+
+This makes it suitable for local preflight checks and CI.
+
+50. MAINTAINABILITY MODEL
+
+The biggest maintainability rule is:
+
+    Do not mix parsing, validation, and presentation.
+
+Keep:
+
+    parsers
+        focused on extracting data
+
+    models
+        focused on representing data
+
+    rules
+        focused on decisions
+
+    findings
+        focused on structured results
+
+    reporters
+        focused on presentation
+
+    CLI
+        focused on orchestration
+
+This lets one layer change without breaking every other layer.
+
+51. HOW TO ADD A NEW RULE
+
+Example: add a new “Privacy Manifest” rule.
+
+Step 1: Create/parser support for the relevant file if necessary.
+
+Step 2: Add a field to ProjectInfo.
+
+Step 3: Create PrivacyManifestRule.
+
+Step 4: Define: - rule code - severity - condition - message -
+recommendation
+
+Step 5: Register the rule.
+
+Step 6: Add unit tests.
+
+Step 7: Add a sample fixture project.
+
+Step 8: Update README/roadmap.
+
+No need to rewrite the CLI.
+
+52. HOW TO ADD A NEW PARSER
+
+Example: add entitlements parsing.
+
+    ios/Runner/Runner.entitlements
+            |
+            v
+       EntitlementsParser
+            |
+            v
+       ProjectInfo.entitlements
+            |
+            v
+       EntitlementsRule
+
+This is the architectural pattern the project should continue using.
+
+53. HOW TO HANDLE MISSING FILES
+
+Missing files should not cause an uncontrolled Python exception.
+
+Instead:
+
+    parser attempts file
+        |
+        +--> exists -> parse
+        |
+        +--> missing -> structured state/finding
+
+Example:
+
+    Info.plist missing
+
+Possible result:
+
+    ERROR [IOS_INFO_PLIST_MISSING]
+    ios/Runner/Info.plist was not found.
+    The analyzer could not validate iOS application metadata.
+
+This is much better than:
+
+    FileNotFoundError
+
+54. HOW TO HANDLE INVALID FILE CONTENT
+
+If a plist/YAML file is malformed:
+
+    parser catches parsing failure
+          |
+          v
+    structured analyzer finding
+
+Example:
+
+    ERROR [IOS_INFO_PLIST_INVALID]
+    Info.plist could not be parsed.
+
+The tool should still report what it can rather than crash
+unnecessarily.
+
+55. ERROR HANDLING
+
+Three kinds of failure should be distinguished:
+
+A. User input error Example: supplied project path does not exist.
+
+B. Project configuration problem Example: missing usage description.
+
+C. Analyzer execution error Example: unexpected internal exception.
+
+These should not all look identical.
+
+56. LOGGING / VERBOSE MODE
+
+Normal mode: concise findings
+
+Verbose mode: useful debugging information
+
+Verbose mode may show: - discovered files - parsed values - active
+rules - rule execution - skipped optional rules - parser warnings
+
+It should still avoid printing secrets.
+
+57. DOCUMENTATION
+
+The repository should document:
+
+-   purpose
+-   installation
+-   commands
+-   examples
+-   supported checks
+-   finding severity
+-   limitations
+-   contribution process
+-   roadmap
+-   architecture
+
+The README is especially important because the project is open source.
+
+58. OPEN SOURCE VALUE
+
+The project is valuable as an engineering portfolio project because it
+demonstrates more than a simple application.
+
+It demonstrates: - CLI design - filesystem processing - parsing - static
+analysis - software architecture - rule engines - testing - developer
+tooling - Git/GitHub - CI/CD potential - platform-specific knowledge -
+open-source documentation
+
+59. WHY PYTHON
+
+Python is a good fit because: - fast development - excellent filesystem
+support - easy text parsing - easy YAML/plist processing - simple CLI
+development - strong testing ecosystem - easy CI integration - low setup
+overhead
+
+The project does not need Flutter to analyze a Flutter project.
+
+Flutter is the TARGET ecosystem, not necessarily the analyzer runtime.
+
+60. WHY NOT WRITE IT IN DART
+
+Dart could also build a CLI tool.
+
+Python is useful here because: - mature scripting ecosystem - easy file
+parsing - easy static-analysis tooling - convenient CI environment -
+fast iteration for developer tools
+
+This is an architectural choice, not a technical requirement.
+
+61. WHY NOT DO EVERYTHING WITH FLUTTER
+
+A Flutter GUI would be unnecessary for the core analyzer.
+
+The CLI is: - faster - easier to automate - easier to run in CI - easier
+to integrate with scripts - more natural for developer tooling
+
+A GUI could be added later on top of the same engine if desired.
+
+62. POSSIBLE FUTURE GUI
+
+If a GUI is ever created, it should not contain the analysis logic.
+
+Correct:
+
+    GUI
+      |
+      v
+    Analysis Engine
+
+Incorrect:
+
+    GUI has its own duplicated rules
+
+The CLI and GUI should share: - ProjectInfo - parsers - rule engine -
+findings
+
+Only the presentation layer changes.
+
+63. CI/CD ARCHITECTURE
+
+Recommended future pipeline:
+
+    Git push / Pull Request
+              |
+              v
+       GitHub Actions
+              |
+              v
+       Flutter iOS Check
+              |
+        +-----+------+
+        |            |
+      clean       findings
+        |            |
+        v            v
+    continue      annotate/fail
+                     |
+                     v
+               developer fixes
+                     |
+                     v
+                   push
+
+This is a natural production use case for the tool.
+
+64. DOCKER’S ROLE
+
+Docker is optional.
+
+It is useful for: - reproducible environments - packaging - CI
+consistency - development isolation
+
+But the core tool does not need Docker.
+
+The main stack remains:
+
+    Python CLI
+
+For a GitHub Actions integration, directly installing/running Python is
+often simpler than adding Docker.
+
+65. GITHUB ACTIONS VS DOCKER
+
+GitHub Actions: automation platform
+
+Docker: containerization technology
+
+They solve different problems.
+
+For this project:
+
+    GitHub Actions = highly useful
+
+    Docker = optional
+
+A clean first CI implementation should use GitHub Actions directly.
+
+66. RELEASE MODEL
+
+A mature open-source tool can be distributed as:
+
+    Python package
+       |
+       +--> pip install ...
+       |
+       v
+    CLI executable/command
+
+Possible future packaging: - pyproject.toml - package metadata - console
+entry point - semantic versioning - GitHub Releases - changelog
+
+67. VERSIONING
+
+Rules can evolve and change behavior.
+
+Therefore stable rule codes are important.
+
+Example:
+
+    IOS_DEPLOYMENT_TARGET
+    IOS_BUNDLE_IDENTIFIER
+    IOS_DISPLAY_NAME
+    IOS_ATS_BROAD_EXCEPTION
+    IOS_PERMISSION_CAMERA
+    FIREBASE_IOS_CONFIG
+
+If message wording changes, the rule code can remain stable.
+
+This helps CI systems identify the same type of problem over time.
+
+68. CONFIGURATION
+
+Future users may want project-specific policy.
+
+Example:
+
+    minimum_ios_version = 13.0
+
+or:
+
+    treat_warnings_as_errors = false
+
+A project configuration file could eventually control this.
+
+However, configuration should be introduced carefully so the tool
+remains easy to use.
+
+69. POLICY VS DETECTION
+
+Detection asks:
+
+    "What does the project contain?"
+
+Policy asks:
+
+    "Is that acceptable?"
+
+Example:
+
+    parser:
+        deployment target = 12.0
+
+    policy:
+        minimum = 13.0
+
+    validator:
+        12.0 < 13.0 -> finding
+
+Separating policy from parsing makes the tool more flexible.
+
+70. IMPORTANT ENGINEERING PRINCIPLE
+
+The tool should never confuse:
+
+    absence of evidence
+
+with:
+
+    evidence of failure
+
+For example:
+
+    plugin mapping not found
+
+does not necessarily mean:
+
+    plugin is broken.
+
+It may mean:
+
+    analyzer does not know this plugin yet.
+
+A good analyzer should say that clearly.
+
+71. CURRENT ARCHITECTURAL SUMMARY
+
+The current architecture can be summarized as:
+
+    +-----------------------------+
+    |            CLI              |
+    | command/path/options        |
+    +-------------+---------------+
+                  |
+                  v
+    +-----------------------------+
+    |       Project Scanner       |
+    | discover project/files      |
+    +-------------+---------------+
+                  |
+                  v
+    +-----------------------------+
+    |          Parsers            |
+    | pubspec / Podfile / plist   |
+    +-------------+---------------+
+                  |
+                  v
+    +-----------------------------+
+    |        ProjectInfo          |
+    | normalized analysis data    |
+    +-------------+---------------+
+                  |
+                  v
+    +-----------------------------+
+    |        Rule Engine          |
+    | validators / rule registry  |
+    +-------------+---------------+
+                  |
+                  v
+    +-----------------------------+
+    |         Findings            |
+    | severity/code/message/etc.  |
+    +-------------+---------------+
+                  |
+                  v
+    +-----------------------------+
+    |         Reporter            |
+    | terminal / future JSON/CI   |
+    +-----------------------------+
+
+72. FULL END-TO-END EXAMPLE
+
+Developer has:
+
+    my_flutter_app/
+
+        pubspec.yaml
+        ios/
+            Podfile
+            Runner/
+                Info.plist
+
+The developer runs:
+
+    flutter-ios-check scan my_flutter_app
+
+The program starts.
+
+CLI: receives path
+
+Scanner: verifies directory
+
+Scanner: finds pubspec.yaml
+
+Scanner: finds ios/
+
+Parser: reads pubspec.yaml
+
+Parser: extracts dependencies
+
+Parser: reads Podfile
+
+Parser: extracts deployment target
+
+Parser: reads Info.plist
+
+Parser: extracts: display name bundle information permission keys URL
+schemes ATS configuration
+
+ProjectInfo: stores all normalized values
+
+Rule engine: executes relevant rules
+
+Rules: compare configuration against policies/requirements
+
+Findings: collect all problems
+
+Reporter: displays summary and details
+
+Developer: fixes the project
+
+Developer: runs scan again
+
+Eventually:
+
+    0 errors
+    acceptable warnings
+    clean preflight result
+
+Then the developer proceeds to: Mac/Xcode/cloud iOS build/testing
+
+73. WHAT “READY” MEANS IN THIS PROJECT
+
+“Ready” should be interpreted as:
+
+    "No known static configuration problems detected by the enabled rules."
+
+It should NOT mean:
+
+    "Apple guarantees this app will build."
+
+This wording is critical for honest documentation.
+
+74. PROJECT VALUE
+
+The tool solves a practical developer problem:
+
+    Find predictable iOS configuration problems early.
+
+Its strongest value proposition is:
+
+    local
+    fast
+    read-only
+    no Mac required for static checks
+    no Apple account required
+    no cloud upload required
+    CI-friendly
+    extensible
+
+75. DEVELOPMENT ROADMAP
+
+Recommended roadmap:
+
+DONE / CORE: - project validation - scanner - pubspec dependency
+analysis - finding model - rule engine - Podfile parsing - Info.plist
+parsing - deployment target validation - display name validation -
+bundle identifier validation - ATS validation - URL scheme extraction -
+permission extraction - documentation
+
+NEXT: - robust plugin-permission mapping - Firebase-aware optional
+validation - stronger automated fixtures - more edge-case parser tests -
+clearer rule codes/severity - JSON output
+
+THEN: - GitHub Actions official workflow - CI annotations -
+configuration/policy file - more iOS configuration checks -
+entitlements - privacy manifests - build settings
+
+LATER: - package distribution - GitHub release automation - optional
+GUI - IDE integration - automatic remediation with explicit opt-in
+
+76. RECOMMENDED DEVELOPMENT ORDER
+
+Do not add dozens of rules at once.
+
+Recommended sequence:
+
+    1. stabilize models
+    2. stabilize parsers
+    3. stabilize finding format
+    4. stabilize rule registry
+    5. add one rule
+    6. add tests
+    7. add fixture
+    8. document it
+    9. add next rule
+
+This prevents the project from becoming a collection of fragile
+if-statements.
+
+77. QUALITY CHECKLIST FOR EVERY NEW RULE
+
+Before merging a rule:
+
+[ ] Does it have a stable rule code? [ ] Is the input data clearly
+defined? [ ] Is parsing separate from validation? [ ] Is the severity
+justified? [ ] Can the rule produce false positives? [ ] Is the wording
+evidence-based? [ ] Does it have unit tests? [ ] Does it have a positive
+case? [ ] Does it have a negative case? [ ] Does it handle missing data?
+[ ] Does it work when the relevant technology is not used? [ ] Is the
+README updated?
+
+78. FINAL MENTAL MODEL
+
+Think of Flutter iOS Check as:
+
+    "A preflight scanner for the native iOS side of a Flutter project."
+
+Not:
+
+    "A Mac replacement."
+
+Not:
+
+    "An iOS compiler."
+
+Not:
+
+    "An App Store approval checker."
+
+It is a static analysis layer that sits BEFORE expensive iOS build/test
+steps.
+
+The most important architecture is:
+
+    Flutter project
+          |
+          v
+    collect evidence
+          |
+          v
+    normalize evidence
+          |
+          v
+    evaluate rules
+          |
+          v
+    produce actionable findings
+          |
+          v
+    developer fixes issues
+          |
+          v
+    real iOS build/test
+
+79. ONE-SENTENCE DESCRIPTION
+
+Flutter iOS Check is a Python-based, read-only CLI static analyzer that
+inspects a Flutter project’s iOS configuration and dependencies,
+validates known iOS readiness rules, and reports actionable findings
+before the project reaches Xcode, device testing, TestFlight, or App
+Store workflows.
+
+80. FINAL ARCHITECTURE IN ONE LINE
+
+CLI -> Scanner -> Parsers -> ProjectInfo -> Rule Engine -> Findings ->
+Reporter
+
+END OF DOCUMENT

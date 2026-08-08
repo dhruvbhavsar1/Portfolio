@@ -1,0 +1,1190 @@
+PRIORITY PING — COMPLETE PROJECT EXPLANATION
+==============================================
+
+Project Name:
+Priority Ping
+
+Project Type:
+Android application for priority/important notifications.
+
+Purpose:
+Priority Ping is an Android notification-management application designed to make sure
+important notifications are not easily missed. The app monitors incoming notifications,
+checks whether a notification belongs to an application/contact that the user has marked
+as important, and then gives that notification special treatment.
+
+The main problem it solves:
+Android can silence or reduce the visibility of notifications because of silent mode,
+Do Not Disturb (DND), notification-channel settings, app settings, or user attention.
+Priority Ping is designed around the idea that selected notifications should receive
+higher priority and stronger user attention.
+
+IMPORTANT TECHNICAL NOTE:
+The application does NOT simply "hack" Android's DND system. It works through Android's
+supported notification and policy-access mechanisms. Depending on Android version,
+OEM/device restrictions, notification-channel configuration, and granted permissions,
+the exact behavior can differ.
+
+--------------------------------------------------
+1. TECHNOLOGY STACK
+--------------------------------------------------
+
+Programming Language:
+- Kotlin
+
+Platform:
+- Android
+
+Main Android APIs / Components:
+- NotificationListenerService
+- Notification APIs
+- NotificationManager
+- Notification channels
+- Notification extras
+- Intent / Activity APIs
+- Do Not Disturb / Notification Policy Access APIs
+- Android Manifest permissions
+
+Database / Local Storage:
+- Room Database
+- SQLite underneath Room
+
+UI:
+- Android XML/View-based UI (where applicable)
+- Android Activities / UI components
+
+Architecture concept:
+- Android app UI
+- Background notification listener service
+- Notification filtering/matching engine
+- Priority rules
+- Local persistence
+- Android system notification/policy APIs
+
+Dependencies discussed:
+- Room Runtime 2.6.1
+- AndroidX libraries as required by the Android project
+
+--------------------------------------------------
+2. HIGH-LEVEL ARCHITECTURE
+--------------------------------------------------
+
+The application can be understood as these layers:
+
+                    +----------------------+
+                    |      Android UI      |
+                    | Settings / Apps /    |
+                    | Priority Configuration|
+                    +----------+-----------+
+                               |
+                               v
+                    +----------------------+
+                    |   Priority Rules     |
+                    | App + Contact Match  |
+                    | Priority Level       |
+                    +----------+-----------+
+                               |
+                               v
+                    +----------------------+
+                    | Notification Listener|
+                    |    Service           |
+                    +----------+-----------+
+                               |
+                 Android sends notification
+                               |
+                               v
+                    +----------------------+
+                    | Incoming Notification|
+                    | package/title/text    |
+                    +----------+-----------+
+                               |
+                               v
+                    +----------------------+
+                    | Notification Parser  |
+                    | Extract useful data   |
+                    +----------+-----------+
+                               |
+                               v
+                    +----------------------+
+                    | Matching / Filtering |
+                    +----------+-----------+
+                               |
+                +--------------+--------------+
+                |                             |
+             Not match                      Match
+                |                             |
+                v                             v
+             Ignore                    Priority handling
+                                              |
+                                              v
+                                  Stronger notification behavior
+                                  / vibration / sound / policy
+                                  according to permissions and
+                                  Android-version limitations
+
+Room database stores persistent configuration and related local data.
+
+--------------------------------------------------
+3. HOW THE APP ACTUALLY WORKS
+--------------------------------------------------
+
+STEP 1 — USER OPENS THE APP
+The user opens Priority Ping and configures which applications or contacts should be
+treated as important.
+
+Examples:
+- WhatsApp
+- Instagram
+- Snapchat
+
+The project was designed around selected applications and specific sender/profile
+information.
+
+STEP 2 — USER CONFIGURES PRIORITY
+The user can define which notifications are important.
+
+For example:
+WhatsApp:
+    Contact = "Rahul"
+    Priority = High
+
+Instagram:
+    Profile/user = selected profile
+    Priority = High
+
+Snapchat:
+    User/profile = selected profile
+    Priority = High
+
+The exact configuration depends on the implementation.
+
+STEP 3 — NOTIFICATION ACCESS
+Android's NotificationListenerService is used.
+
+The user must manually grant Notification Access to Priority Ping from Android settings.
+
+This permission allows the application to receive callbacks when notifications are posted,
+removed, or changed.
+
+The app does NOT need to continuously poll every application.
+
+Instead, Android provides notification events to the listener service.
+
+STEP 4 — NOTIFICATION ARRIVES
+Suppose WhatsApp receives a message.
+
+Android creates a notification.
+
+The NotificationListenerService receives the notification event.
+
+Conceptually:
+
+onNotificationPosted(statusBarNotification)
+
+The service can inspect the notification package and its extras.
+
+STEP 5 — IDENTIFY THE SOURCE APP
+The notification contains information about which application generated it.
+
+The package name can be used.
+
+Examples:
+WhatsApp:
+com.whatsapp
+
+Instagram:
+com.instagram.android
+
+Snapchat:
+com.snapchat.android
+
+Priority Ping uses the package/application identity to determine which rule should be
+applied.
+
+STEP 6 — EXTRACT NOTIFICATION INFORMATION
+The Notification object contains extras.
+
+The implementation can read values such as:
+
+android.title
+android.text
+
+The title commonly contains a sender/contact/application-generated title.
+
+The text commonly contains the notification message or preview.
+
+Example conceptual notification:
+
+Package:
+com.whatsapp
+
+Title:
+Rahul
+
+Text:
+"Call me when you are free"
+
+Priority Ping can use this information for matching.
+
+STEP 7 — MATCH THE NOTIFICATION
+The notification is passed through the matching logic.
+
+The matching process is conceptually:
+
+1. Check application package.
+2. Find rules configured for that application.
+3. Extract sender/title/profile information.
+4. Compare it against configured priority contacts/users.
+5. Determine priority level.
+6. Trigger appropriate handling.
+
+Example:
+
+Incoming:
+package = com.whatsapp
+title = Rahul
+
+Configured:
+package = com.whatsapp
+contact = Rahul
+priority = HIGH
+
+Result:
+MATCH
+
+If:
+
+package = com.whatsapp
+title = Unknown Person
+
+and no matching rule exists:
+
+Result:
+NO MATCH
+
+STEP 8 — PRIORITY HANDLING
+When a notification matches a priority rule, the app attempts to give it stronger
+attention using Android's supported notification/policy mechanisms.
+
+Possible mechanisms include:
+- Higher notification importance where applicable
+- Custom vibration
+- Notification policy access / DND-related handling
+- Re-posting or creating a priority notification where appropriate
+- Custom notification sound where permitted
+- Other notification behavior supported by the Android version
+
+The exact behavior depends heavily on Android's notification and DND restrictions.
+
+--------------------------------------------------
+4. NOTIFICATION LISTENER SERVICE
+--------------------------------------------------
+
+This is one of the most important components of Priority Ping.
+
+NotificationListenerService is an Android service designed for applications that need to
+observe notifications.
+
+Typical lifecycle callbacks include:
+
+onNotificationPosted()
+    Called when a notification is posted.
+
+onNotificationRemoved()
+    Called when a notification is removed.
+
+The main processing happens when a notification is posted.
+
+Conceptually:
+
+Notification arrives
+        |
+        v
+onNotificationPosted()
+        |
+        v
+Get package name
+        |
+        v
+Read notification extras
+        |
+        v
+Find configured rules
+        |
+        v
+Match sender/content
+        |
+        v
+Determine priority
+        |
+        v
+Apply priority behavior
+
+This is a background service rather than a normal screen.
+
+--------------------------------------------------
+5. WHY NOTIFICATIONLISTENERSERVICE WAS USED
+--------------------------------------------------
+
+A normal Activity cannot reliably monitor all notifications while the app is closed.
+
+The NotificationListenerService is specifically designed for notification access.
+
+Advantages:
+- Android manages the service lifecycle.
+- It receives notification events.
+- It can work while the application UI is not open.
+- It can inspect notification metadata that Android exposes through the listener API.
+
+This is the core reason this architecture was selected.
+
+--------------------------------------------------
+6. PACKAGE NAME MATCHING
+--------------------------------------------------
+
+Package names provide a reliable way to identify the source application.
+
+Examples:
+
+com.whatsapp
+com.instagram.android
+com.snapchat.android
+
+Instead of saying:
+
+"If title contains WhatsApp"
+
+the app can determine:
+
+"Which Android package generated this notification?"
+
+This is more structured and reduces accidental matches.
+
+Example:
+
+if package == "com.whatsapp":
+    process WhatsApp rules
+
+if package == "com.instagram.android":
+    process Instagram rules
+
+if package == "com.snapchat.android":
+    process Snapchat rules
+
+--------------------------------------------------
+7. NOTIFICATION EXTRAS
+--------------------------------------------------
+
+Android notifications contain a Bundle of extras.
+
+Important values used by this project include:
+
+android.title
+android.text
+
+Conceptually:
+
+val title = extras.getCharSequence("android.title")
+val text = extras.getCharSequence("android.text")
+
+The exact structure varies between applications.
+
+For example, WhatsApp may expose sender/message information differently depending on
+notification type, Android version, privacy settings, grouping, and application changes.
+
+Therefore notification parsing should be treated as application-specific and not assumed
+to be identical for every app.
+
+--------------------------------------------------
+8. PRIORITY LEVEL MODEL
+--------------------------------------------------
+
+The project included a PriorityLevel model.
+
+A priority level represents how important a matched notification is.
+
+Conceptually:
+
+LOW
+MEDIUM
+HIGH
+
+or equivalent levels depending on the implementation.
+
+The priority model separates the rule:
+
+"Who/what is important?"
+
+from the behavior:
+
+"What should happen when it is important?"
+
+This makes the architecture easier to extend.
+
+For example:
+
+PriorityLevel.HIGH
+    -> stronger vibration
+    -> priority handling
+
+PriorityLevel.MEDIUM
+    -> normal custom vibration
+
+PriorityLevel.LOW
+    -> lighter handling
+
+--------------------------------------------------
+9. CUSTOM VIBRATION
+--------------------------------------------------
+
+Priority Ping can use different vibration patterns for priority notifications.
+
+Example conceptual patterns:
+
+Normal:
+short vibration
+
+High:
+longer / repeated vibration
+
+The exact pattern is controlled through Android's notification/vibration APIs and device
+capabilities.
+
+This is useful because the user can recognize a priority notification by its vibration
+pattern without immediately looking at the phone.
+
+Modern Android versions also have notification-channel and vibration settings that can
+affect the final behavior.
+
+--------------------------------------------------
+10. SOUND AND DND
+--------------------------------------------------
+
+One of the important goals of the project was to make selected notifications noticeable
+even when the phone is quiet.
+
+However, Android does not allow an ordinary application to arbitrarily bypass all system
+silencing rules.
+
+The supported architecture involves Android notification policy access and notification
+settings.
+
+DND-related behavior may require the user to grant Notification Policy Access.
+
+The application can then work within Android's policy APIs.
+
+Important distinction:
+
+Notification Access
+    Allows Priority Ping to observe notifications.
+
+Notification Policy Access
+    Allows the app to interact with supported Do Not Disturb / interruption policy
+    controls.
+
+These are different permissions/access mechanisms.
+
+The user must explicitly grant the relevant access from Android settings.
+
+Even with policy access, Android/OEM restrictions can affect behavior.
+
+--------------------------------------------------
+11. NOTIFICATION POLICY ACCESS
+--------------------------------------------------
+
+The project considered Android's Notification Policy Access APIs for DND-related
+behavior.
+
+Conceptually:
+
+User
+  |
+  +--> Notification Access
+  |       |
+  |       +--> Priority Ping can observe notifications
+  |
+  +--> Notification Policy Access
+          |
+          +--> Priority Ping can use supported DND policy controls
+
+This is fundamentally different from trying to bypass Android security.
+
+The application uses the APIs exposed by the operating system.
+
+--------------------------------------------------
+12. NOTIFICATION CHANNELS
+--------------------------------------------------
+
+Modern Android uses notification channels.
+
+A notification channel can control:
+- Importance
+- Sound
+- Vibration
+- Visibility
+- Other notification behavior
+
+A major limitation is that applications cannot always override user-modified channel
+settings.
+
+Therefore, if the project creates or manages a priority channel, the user/device's
+channel configuration still matters.
+
+Example:
+
+priority_channel
+    importance = HIGH
+
+The actual behavior can still depend on:
+- User settings
+- Android version
+- OEM skin
+- Device sound mode
+- DND policy
+- Channel settings
+
+--------------------------------------------------
+13. ROOM DATABASE
+--------------------------------------------------
+
+Room was used for local structured storage.
+
+Room is Google's abstraction over SQLite.
+
+Architecture:
+
+Application
+    |
+    v
+Room DAO
+    |
+    v
+Room Database
+    |
+    v
+SQLite
+
+Possible stored information:
+- Priority rules
+- Selected applications
+- Contact/profile identifiers
+- Priority levels
+- User configuration
+
+Why Room?
+
+Because the application has structured local data and Room provides:
+- Type-safe database access
+- SQLite persistence
+- DAO abstraction
+- Entity classes
+- Easier database maintenance
+- Compile-time query validation
+
+The project used Room Runtime 2.6.1 as discussed.
+
+--------------------------------------------------
+14. ROOM COMPONENTS
+--------------------------------------------------
+
+A typical Room structure contains:
+
+Entity
+    Represents a database table.
+
+DAO
+    Defines database operations.
+
+Database
+    Main Room database class.
+
+Conceptually:
+
+PriorityRuleEntity
+    id
+    packageName
+    targetName
+    priorityLevel
+    enabled
+
+PriorityRuleDao
+    insertRule()
+    updateRule()
+    deleteRule()
+    getRules()
+
+PriorityDatabase
+    Provides Room database instance.
+
+The exact fields depend on the final implementation.
+
+--------------------------------------------------
+15. UI / USER FLOW
+--------------------------------------------------
+
+The UI is responsible for configuration.
+
+Typical flow:
+
+Open Priority Ping
+       |
+       v
+Home Screen
+       |
+       +--> WhatsApp
+       |
+       +--> Instagram
+       |
+       +--> Snapchat
+       |
+       +--> Priority settings
+       |
+       +--> Permission/settings guidance
+
+For WhatsApp:
+- User enters/selects a contact name.
+
+For Instagram/Snapchat:
+- User can provide profile/user information.
+
+The configuration is then used by the notification listener.
+
+--------------------------------------------------
+16. WHY THE APP NEEDS SPECIAL ACCESS
+--------------------------------------------------
+
+Android protects notification data because notifications can contain private information.
+
+Therefore, an application cannot silently read all notifications.
+
+The user must explicitly enable Notification Access.
+
+Similarly, DND/policy controls are protected by Android and require user authorization.
+
+This is part of Android's security model.
+
+--------------------------------------------------
+17. COMPLETE EVENT FLOW
+--------------------------------------------------
+
+Example:
+
+User configures:
+WhatsApp -> Rahul -> HIGH
+
+Phone is locked.
+
+Rahul sends WhatsApp message.
+
+                    WhatsApp
+                       |
+                       v
+              Android notification
+                       |
+                       v
+          NotificationListenerService
+                       |
+                       v
+              packageName
+             "com.whatsapp"
+                       |
+                       v
+             Read notification
+              title = Rahul
+              text = message
+                       |
+                       v
+              Matching engine
+                       |
+             +---------+---------+
+             |                   |
+           MATCH               NO MATCH
+             |                   |
+             v                   v
+        HIGH priority           Ignore/
+        handling                normal flow
+             |
+             v
+     vibration / sound /
+     priority behavior
+     according to Android
+     permissions and settings
+
+--------------------------------------------------
+18. WHY THE APP DOES NOT NEED A SERVER
+--------------------------------------------------
+
+The core Priority Ping functionality can operate locally on the Android phone.
+
+The notification event already exists on the device.
+
+The application does not need to send the notification to a remote server to decide
+whether it is important.
+
+Advantages:
+- Lower latency
+- Works without internet for core processing
+- Better privacy
+- No backend infrastructure
+- No server cost
+- Faster matching
+
+Room also provides local persistent storage.
+
+--------------------------------------------------
+19. PRIVACY CONSIDERATIONS
+--------------------------------------------------
+
+Notification content can be sensitive.
+
+Because the app observes notification information, it should:
+- Process data locally when possible.
+- Avoid unnecessary network transmission.
+- Avoid logging message contents.
+- Protect stored priority configuration.
+- Request only necessary permissions.
+- Explain why Notification Access is required.
+
+The project architecture is naturally suited to local processing.
+
+--------------------------------------------------
+20. ANDROID SECURITY MODEL
+--------------------------------------------------
+
+Priority Ping operates inside Android's permission/security model.
+
+Important security boundaries:
+
+Notification Access:
+    User grants access.
+
+Notification Policy Access:
+    User grants policy access.
+
+Notification channels:
+    Controlled by Android and user settings.
+
+DND:
+    Controlled by Android's interruption policy.
+
+Sound:
+    Controlled by system volume/modes and notification configuration.
+
+OEM restrictions:
+    Manufacturers may change background-service behavior.
+
+Therefore the app cannot guarantee identical behavior on every Android phone.
+
+--------------------------------------------------
+21. IMPORTANT LIMITATIONS
+--------------------------------------------------
+
+1. Android version differences
+Notification APIs and restrictions change across Android releases.
+
+2. OEM differences
+Samsung, Xiaomi, OnePlus, Vivo, Oppo, etc. can apply additional background restrictions.
+
+3. Notification parsing differences
+WhatsApp, Instagram, Snapchat and other applications do not expose notification data
+in exactly the same way.
+
+4. Notification grouping
+Multiple messages may be grouped into one notification.
+
+5. Private/hidden notification content
+Lock-screen privacy or application behavior can limit available text.
+
+6. User settings
+Users can change channel importance, sound, vibration, DND rules, etc.
+
+7. DND restrictions
+The application cannot arbitrarily defeat Android's security model.
+
+8. Battery optimization
+Some manufacturers aggressively restrict background processes.
+
+9. App updates
+If another app changes its notification format, matching logic may need updates.
+
+--------------------------------------------------
+22. WHY KOTLIN
+--------------------------------------------------
+
+Kotlin was selected because it is Android's modern first-class development language.
+
+Advantages:
+- Concise syntax
+- Null-safety
+- Excellent Android tooling
+- Strong AndroidX support
+- Coroutines support
+- Good interoperability with Java
+- Modern language features
+
+For this project, Kotlin is particularly suitable for implementing Android services,
+Room entities/DAOs, and notification APIs.
+
+--------------------------------------------------
+23. WHY ROOM
+--------------------------------------------------
+
+Without Room:
+
+UI / service
+    |
+    v
+Raw SQLite queries
+
+With Room:
+
+UI / service
+    |
+    v
+DAO
+    |
+    v
+Room
+    |
+    v
+SQLite
+
+Room reduces boilerplate and makes the local database easier to maintain.
+
+--------------------------------------------------
+24. WHY LOCAL-FIRST ARCHITECTURE
+--------------------------------------------------
+
+The main event is local:
+
+Notification
+    -> Listener
+    -> Matching
+    -> Priority action
+
+There is no need for:
+
+Notification
+    -> Internet
+    -> Server
+    -> Database
+    -> Response
+    -> Phone
+
+The local architecture gives faster reaction time.
+
+--------------------------------------------------
+25. COMPONENT BREAKDOWN
+--------------------------------------------------
+
+A logical project structure can be viewed as:
+
+app/
+|
++-- ui/
+|   +-- MainActivity
+|   +-- Settings screens
+|   +-- Priority configuration UI
+|
++-- service/
+|   +-- PriorityNotificationListenerService
+|
++-- model/
+|   +-- PriorityLevel
+|   +-- PriorityRule
+|
++-- data/
+|   +-- Room database
+|   +-- Entities
+|   +-- DAOs
+|
++-- notification/
+|   +-- Notification parser
+|   +-- Notification builder
+|   +-- Priority handling
+|
++-- util/
+|   +-- Package constants
+|   +-- Matching utilities
+|   +-- Permission helpers
+
+The exact filenames may differ from the final project, but this describes the logical
+architecture discussed for Priority Ping.
+
+--------------------------------------------------
+26. PACKAGE CONSTANTS
+--------------------------------------------------
+
+The application can maintain known package identifiers:
+
+WHATSAPP:
+com.whatsapp
+
+INSTAGRAM:
+com.instagram.android
+
+SNAPCHAT:
+com.snapchat.android
+
+These constants make matching more maintainable than scattering string literals
+throughout the application.
+
+--------------------------------------------------
+27. MATCHING ENGINE
+--------------------------------------------------
+
+A clean matching engine should conceptually do:
+
+Input:
+NotificationData
+
+Output:
+PriorityMatch or NoMatch
+
+NotificationData:
+- packageName
+- title
+- text
+- timestamp
+- notification key
+- other available metadata
+
+Rule:
+- packageName
+- target identifier
+- priority
+- enabled
+
+Matching:
+
+if rule.enabled
+and rule.packageName == notification.packageName
+and target matches notification title/content:
+
+    return matching priority
+
+else:
+
+    no match
+
+This separation makes the service easier to maintain.
+
+--------------------------------------------------
+28. DATA FLOW
+--------------------------------------------------
+
+USER CONFIGURATION
+       |
+       v
+UI
+       |
+       v
+Repository / DAO
+       |
+       v
+Room
+       |
+       v
+Priority Rules
+
+INCOMING NOTIFICATION
+       |
+       v
+NotificationListenerService
+       |
+       v
+Notification Parser
+       |
+       v
+Matching Engine
+       |
+       v
+Priority Level
+       |
+       v
+Notification / Policy Handling
+
+--------------------------------------------------
+29. WHY THIS IS A GOOD ANDROID PROJECT
+--------------------------------------------------
+
+Priority Ping demonstrates several important Android concepts in one project:
+
+- Kotlin
+- Android services
+- NotificationListenerService
+- Notification APIs
+- Notification channels
+- Runtime/user-granted special access
+- Do Not Disturb / notification policy concepts
+- Background processing
+- Room database
+- SQLite
+- Local-first architecture
+- Event-driven programming
+- Android security and permissions
+- App-specific notification parsing
+- Custom vibration/notification behavior
+- UI configuration
+
+It is more than a simple CRUD application because it interacts with Android system
+services.
+
+--------------------------------------------------
+30. WHAT WE ACTUALLY BUILT / IMPLEMENTED
+--------------------------------------------------
+
+The project work included:
+
+1. Created the Priority Ping Android project.
+2. Used Kotlin for Android development.
+3. Implemented notification listening using NotificationListenerService.
+4. Added notification-access configuration.
+5. Read notification package names.
+6. Read notification title/text from Android notification extras.
+7. Added support logic around WhatsApp, Instagram and Snapchat.
+8. Added matching based on selected sender/profile/contact information.
+9. Created a priority-level concept/model.
+10. Added custom vibration behavior.
+11. Worked with Android notification behavior.
+12. Worked with DND / Notification Policy Access concepts.
+13. Added local Room database architecture.
+14. Designed the app around local processing instead of a backend.
+15. Created a UI for configuring priority applications/contacts.
+16. Tested the behavior with real Android notifications and system settings.
+17. Considered Android/OEM limitations around silent mode, DND and background execution.
+
+--------------------------------------------------
+31. HOW TO EXPLAIN THIS PROJECT TO A FACULTY
+--------------------------------------------------
+
+Short technical explanation:
+
+"Priority Ping is a Kotlin-based Android application that monitors incoming
+notifications using NotificationListenerService. The user configures important
+applications or contacts, and the service receives notification events from Android.
+We extract the package name, title and text from the notification extras and compare
+them with locally stored priority rules. For matching notifications, the app applies
+priority handling such as custom vibration and supported notification/policy behavior.
+We use Room over SQLite to persist the priority configuration locally. For DND-related
+functionality, we use Android's Notification Policy Access mechanisms rather than
+trying to bypass Android security."
+
+If asked:
+"How does it work when the app is closed?"
+
+Answer:
+"The UI does not need to remain open. NotificationListenerService is an Android
+system-managed service that receives notification events. So when a notification is
+posted, Android invokes the listener and our matching logic processes it."
+
+If asked:
+"How do you know the notification is from WhatsApp?"
+
+Answer:
+"We use the notification's source package name, for example com.whatsapp."
+
+If asked:
+"How do you know who sent it?"
+
+Answer:
+"We read the notification extras such as android.title and android.text and match
+the exposed sender/title information against the user's configured priority rule.
+The exact data available depends on the source app and Android version."
+
+If asked:
+"How did you bypass DND?"
+
+Better technical answer:
+"We did not bypass Android security. We used Android's supported Notification Policy
+Access and notification APIs. The user grants the required access, and the app applies
+priority behavior within the restrictions imposed by Android and the device."
+
+If asked:
+"Why Room?"
+
+Answer:
+"Room provides a structured abstraction over SQLite for storing priority rules and
+configuration locally."
+
+--------------------------------------------------
+32. KEY TERMS TO REMEMBER
+--------------------------------------------------
+
+Kotlin
+Android
+NotificationListenerService
+onNotificationPosted()
+StatusBarNotification
+Notification
+NotificationManager
+Notification Channel
+Notification Extras
+android.title
+android.text
+Package Name
+Notification Policy Access
+Do Not Disturb
+Vibration
+Room
+SQLite
+DAO
+Entity
+Database
+PriorityLevel
+Matching Engine
+Local-first
+Event-driven architecture
+Android permissions
+OEM restrictions
+
+--------------------------------------------------
+33. ONE-LINE ARCHITECTURE
+--------------------------------------------------
+
+Android Notification
+        ->
+NotificationListenerService
+        ->
+Notification Parser
+        ->
+Package + Sender Matching
+        ->
+PriorityLevel
+        ->
+Priority Notification Handling
+
+with:
+
+UI
+  ->
+Room/SQLite
+  ->
+Priority Rules
+  ->
+Matching Engine
+
+--------------------------------------------------
+34. FINAL PROJECT SUMMARY
+--------------------------------------------------
+
+Priority Ping is an Android notification-prioritization application built with Kotlin.
+Its central component is NotificationListenerService, which receives notification
+events from Android. The application identifies the source package, extracts available
+notification information, and compares it against user-defined priority rules.
+
+The configuration is stored locally using Room/SQLite. When a notification matches a
+priority rule, the application performs supported priority notification behavior such
+as custom vibration and notification/policy handling.
+
+The application is intentionally local-first and does not require a server for its core
+notification processing. It demonstrates Android background services, notification
+APIs, special permissions, local databases, event-driven architecture, and system-level
+integration.
+
+The most important technical point is that Priority Ping works WITH Android's supported
+APIs and permissions; it should not be described as an unrestricted DND bypass.
+
+--------------------------------------------------
+END OF PRIORITY PING PROJECT DOCUMENT
+--------------------------------------------------

@@ -4,6 +4,7 @@ import { elements } from './utils/dom.js';
 import { executeCommand } from './commands/executor.js';
 import { wireMenuButtons, wireSidebar } from './handlers/handlers.js';
 import { commandNames } from './commands/registry.js';
+import { setProjectCommandInvoker } from './renderers/projects.js';
 
 // Boot sequence preserved with timings
 export async function boot(){
@@ -60,7 +61,18 @@ function wireTerminalInput() {
         if (event.key === 'Tab') {
             event.preventDefault();
             const prefix = input.value.trim().toLowerCase();
+            const commandPrefix = prefix.split(/\s+/)[0];
+            const projectPrefix = prefix.startsWith('project ') || prefix.startsWith('details ') ? prefix.replace(/^(project|details)\s+/i, '') : '';
             const matches = commandNames.filter(name => name.startsWith(prefix));
+            const projectMatches = projectPrefix ? (await import('./renderers/projects.js')).getProjectAutocompleteOptions(projectPrefix) : [];
+            if (projectMatches.length) {
+                const nextValue = prefix.startsWith('project ') ? `project ${projectMatches[tabIndex % projectMatches.length]}` : prefix.startsWith('details ') ? `details ${projectMatches[tabIndex % projectMatches.length]}` : prefix;
+                if (tabMatches.join('|') !== projectMatches.join('|')) { tabMatches = projectMatches; tabIndex = 0; }
+                input.value = nextValue;
+                sync();
+                tabIndex += 1;
+                return;
+            }
             if (!matches.length) return;
             if (matches.length === 1) input.value = matches[0];
             else {
@@ -95,6 +107,9 @@ document.addEventListener('DOMContentLoaded', () => {
     wireMenuButtons();
     wireSidebar();
     wireTerminalInput();
+    setProjectCommandInvoker(async (command) => {
+        await executeCommand(command);
+    });
     (async () => {
         try {
             await boot();
