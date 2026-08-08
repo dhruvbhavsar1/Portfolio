@@ -1,4 +1,4 @@
-readme = """# Phruv Bhavsar - Portfolio
+readme =  Dhruv Bhavsar - Portfolio
 
 Personal portfolio website showcasing my projects, skills, and development work.
 
