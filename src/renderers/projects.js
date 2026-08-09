@@ -2,10 +2,10 @@ import { portfolioData } from '../data/portfolio.js';
 import { elements } from '../utils/dom.js';
 
 const detailFileMap = {
-    'charity-marketplace': 'charity.txt',
-    'monginis-crm': 'Monginis_CRM.txt',
-    'flutter-ios-check': 'flutter-ios-check.txt',
-    'priority-ping': 'Priority-Ping.txt'
+    'charity-marketplace': 'docs/projects/charity-app.md',
+    'monginis-crm': 'docs/projects/monginis-crm.md',
+    'flutter-ios-check': 'docs/notes/flutter-ios-check.md',
+    'priority-ping': 'docs/projects/priority-ping.md'
 };
 
 const projectAliasMap = {

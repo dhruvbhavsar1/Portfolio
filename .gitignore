@@ -1,0 +1,55 @@
+# Environment & Configuration
+.env
+.env.local
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+*.egg-info/
+dist/
+build/
+__pycache__/
+*.pyc
+*.pyo
+*.egg
+.venv/
+venv/
+env/
+
+# Build outputs & artifacts
+*.min.js
+*.min.css
+.cache/
+.next/
+out/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.sublime-project
+.sublime-workspace
+
+# Testing & Coverage
+coverage/
+.nyc_output/
+pytest_cache/
+
+# OS-specific
+.DS_Store
+.AppleDouble
+.LSOverride
+*.bak
+*.tmp
+
+# Git-related
+.git/
+.gitkeep
+
+# Local development
+local/
+temp/
+tmp/
