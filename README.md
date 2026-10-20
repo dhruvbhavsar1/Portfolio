@@ -75,8 +75,7 @@ Portfolio/
 │       └── flutter-ios-check.md
 ├── assets/
 │   └── resume/
-│       ├── Dhruv_Bhavsar_Resume.docx
-│       └── Dhruv_Bhavsar_Resume.pdf
+│       └── Dhruv_Bhavsar_Resume.docx
 ├── README.md                      # This file
 ├── LICENSE                        # MIT License
 └── .gitignore                     # Git ignore rules
@@ -141,7 +140,6 @@ Python command-line tool for analyzing Flutter projects' iOS readiness without r
 
 ## 📄 Resume
 
-- **📥 PDF Resume:** [Dhruv_Bhavsar_Resume.pdf](assets/resume/Dhruv_Bhavsar_Resume.pdf)
 - **📥 Word Resume:** [Dhruv_Bhavsar_Resume.docx](assets/resume/Dhruv_Bhavsar_Resume.docx)
 
 ---

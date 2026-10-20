@@ -31,7 +31,7 @@ export const portfolioData = {
         frameworks: ['Flutter','Android SDK (Kotlin)'],
         backend: ['Firebase Firestore','Hive','SQLite','MySQL','Cloudinary'],
         tools: ['Git/GitHub','VS Code','Android Studio'],
-        concepts: ['first architecture','Lazy loading','Incremental sync','REST APIs','Notification systems']
+        concepts: ['Offline-first architecture','Lazy loading','Incremental sync','REST APIs','Notification systems']
     },
     education: [
         {
@@ -56,8 +56,8 @@ export const portfolioData = {
             status: 'PROJECT',
             type: 'MOBILE APPLICATION',
             stack: ['Flutter','Firebase','Hive','Cloudinary'],
-            description: 'first marketplace with admin panel, order history, tracking, and optimized Firestore reads.',
-            features: ['first architecture','Admin panel','Order history','Tracking','Optimized Firestore reads','Lazy loading','Cloudinary CDN','UPI payments','WhatsApp automation']
+            description: 'Offline-first marketplace with admin panel, order history, tracking, and optimized Firestore reads.',
+            features: ['Offline-first architecture','Admin panel','Order history','Tracking','Optimized Firestore reads','Lazy loading','Cloudinary CDN','UPI payments','WhatsApp automation']
         },
         {
             id: 'monginis-crm',
